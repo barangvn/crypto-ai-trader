@@ -1,0 +1,6 @@
+raw_symbol,raw_timestamp,open,high,low,close,volume,trade_count,event_type,timeframe,raw_trade_id,raw_sequence,spread_bps
+BTCUSDT,2026-08-10 10:04:00,65080.00,65100.00,65075.00,65095.00,1.80,104,candle,1m,,5,
+BTCUSDT,2026-08-10 10:03:00,65060.00,65080.00,65055.00,65075.00,1.60,103,candle,1m,,4,
+BTCUSDT,2026-08-10 10:02:00,65040.00,65060.00,65035.00,65055.00,1.40,102,candle,1m,,3,
+BTCUSDT,2026-08-10 10:01:00,65020.00,65040.00,65015.00,65035.00,1.20,101,candle,1m,,2,
+BTCUSDT,2026-08-10 10:00:00,65000.00,65020.00,64995.00,65015.00,1.00,100,candle,1m,,1,

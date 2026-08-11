@@ -1,0 +1,4 @@
+raw_symbol,raw_timestamp,open,high,low,close,volume,trade_count,event_type,timeframe,raw_trade_id,raw_sequence,spread_bps
+BTCUSDT,2026-08-10 10:00:00,65000.00,65040.00,64990.00,65030.00,1.00,100,candle,1m,,1,6000
+BTCUSDT,2026-08-10 10:01:00,65050.00,65090.00,65040.00,65080.00,1.30,101,candle,1m,,2,6000
+BTCUSDT,2026-08-10 10:02:00,65100.00,65140.00,65090.00,65130.00,1.60,102,candle,1m,,3,6000
