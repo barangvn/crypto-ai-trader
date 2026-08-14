@@ -28,7 +28,11 @@ def _iter_py_files(root_dir: str):
         for f in files:
             if not f.endswith(".py"):
                 continue
-            if f == "test_no_credentials.py":
+            if f in {
+                "test_no_credentials.py",
+                "test_registry_no_credentials.py",
+                "test_bus_no_credentials.py",
+            }:
                 continue
             yield os.path.join(root, f)
 

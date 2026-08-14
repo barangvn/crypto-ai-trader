@@ -65,6 +65,7 @@ def _iter_py_files(dirs: list[Path]) -> list[Path]:
     exclude_names = {
         "test_registry_no_credentials.py",
         "test_no_credentials.py",
+        "test_bus_no_credentials.py",
     }
     for d in dirs:
         if not d.exists():
