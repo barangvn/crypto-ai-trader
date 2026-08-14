@@ -1,0 +1,24 @@
+{
+  "bundle_id": "edge_duplicate",
+  "bundle_version": "1.0.0",
+  "checksum_sha256": "29882c7ab06ae5a7426e9bee99226f7b7c1f43aa7f0e3ae468708728d5f2d217",
+  "display_name": "Edge Duplicate",
+  "event_type": "candle",
+  "expected_first_ts": "2026-08-10T10:00:00.000Z",
+  "expected_last_ts": "2026-08-10T10:03:00.000Z",
+  "expected_rows": 5,
+  "fixture_path": "tests_fixtures/edge_duplicate.csv",
+  "manifest_path": "tests_fixtures\\edge_duplicate.manifest.json",
+  "notes": null,
+  "registered_at": "2026-08-11T19:35:17.282Z",
+  "symbols": [
+    "BTC_USDT"
+  ],
+  "tags": [
+    "duplicate",
+    "edge"
+  ],
+  "timeframes": [
+    "1m"
+  ]
+}

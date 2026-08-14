@@ -1,0 +1,174 @@
+[
+  {
+    "bundle_id": "edge_abnormal_spread",
+    "bundle_version": "1.0.0",
+    "checksum_sha256": "8fdb67b901714cc34a13ebcc2bec188eceec2f103031e30a497254165ef2da0c",
+    "display_name": "Edge Abnormal Spread",
+    "event_type": "candle",
+    "expected_first_ts": "2026-08-10T10:00:00.000Z",
+    "expected_last_ts": "2026-08-10T10:02:00.000Z",
+    "expected_rows": 3,
+    "fixture_path": "tests_fixtures/edge_abnormal_spread.csv",
+    "manifest_path": null,
+    "notes": null,
+    "registered_at": "2026-08-11T19:35:17.275Z",
+    "symbols": [
+      "BTC_USDT"
+    ],
+    "tags": [
+      "abnormal",
+      "edge",
+      "spread"
+    ],
+    "timeframes": [
+      "1m"
+    ]
+  },
+  {
+    "bundle_id": "edge_duplicate",
+    "bundle_version": "1.0.0",
+    "checksum_sha256": "29882c7ab06ae5a7426e9bee99226f7b7c1f43aa7f0e3ae468708728d5f2d217",
+    "display_name": "Edge Duplicate",
+    "event_type": "candle",
+    "expected_first_ts": "2026-08-10T10:00:00.000Z",
+    "expected_last_ts": "2026-08-10T10:03:00.000Z",
+    "expected_rows": 5,
+    "fixture_path": "tests_fixtures/edge_duplicate.csv",
+    "manifest_path": null,
+    "notes": null,
+    "registered_at": "2026-08-11T19:35:17.282Z",
+    "symbols": [
+      "BTC_USDT"
+    ],
+    "tags": [
+      "duplicate",
+      "edge"
+    ],
+    "timeframes": [
+      "1m"
+    ]
+  },
+  {
+    "bundle_id": "edge_invalid_price_volume",
+    "bundle_version": "1.0.0",
+    "checksum_sha256": "f99f684144d42a84d69ecf04fa0180850a6a14545ae47812c1bb5e94b1b842df",
+    "display_name": "Edge Invalid Price Volume",
+    "event_type": "candle",
+    "expected_first_ts": "2026-08-10T10:00:00.000Z",
+    "expected_last_ts": "2026-08-10T10:05:00.000Z",
+    "expected_rows": 6,
+    "fixture_path": "tests_fixtures/edge_invalid_price_volume.csv",
+    "manifest_path": null,
+    "notes": null,
+    "registered_at": "2026-08-11T19:35:17.291Z",
+    "symbols": [
+      "BTC_USDT"
+    ],
+    "tags": [
+      "edge",
+      "invalid",
+      "price",
+      "volume"
+    ],
+    "timeframes": [
+      "1m"
+    ]
+  },
+  {
+    "bundle_id": "edge_missing",
+    "bundle_version": "1.0.0",
+    "checksum_sha256": "33a8b0a3f8380beb4686fb3e7dfb304d094695dacff1348dc25577206e8ebead",
+    "display_name": "Edge Missing",
+    "event_type": "candle",
+    "expected_first_ts": "2026-08-10T10:00:00.000Z",
+    "expected_last_ts": "2026-08-10T10:59:00.000Z",
+    "expected_rows": 58,
+    "fixture_path": "tests_fixtures/edge_missing.csv",
+    "manifest_path": null,
+    "notes": null,
+    "registered_at": "2026-08-11T19:35:17.299Z",
+    "symbols": [
+      "BTC_USDT"
+    ],
+    "tags": [
+      "edge",
+      "missing"
+    ],
+    "timeframes": [
+      "1m"
+    ]
+  },
+  {
+    "bundle_id": "edge_outoforder",
+    "bundle_version": "1.0.0",
+    "checksum_sha256": "b1b8655b2bdf352dd5b90f871431994e2ca66b6863a03dc65a020919ecb0dc9b",
+    "display_name": "Edge Outoforder",
+    "event_type": "candle",
+    "expected_first_ts": "2026-08-10T10:00:00.000Z",
+    "expected_last_ts": "2026-08-10T10:04:00.000Z",
+    "expected_rows": 5,
+    "fixture_path": "tests_fixtures/edge_outoforder.csv",
+    "manifest_path": null,
+    "notes": null,
+    "registered_at": "2026-08-11T19:35:17.305Z",
+    "symbols": [
+      "BTC_USDT"
+    ],
+    "tags": [
+      "edge",
+      "outoforder"
+    ],
+    "timeframes": [
+      "1m"
+    ]
+  },
+  {
+    "bundle_id": "edge_stale",
+    "bundle_version": "1.0.0",
+    "checksum_sha256": "d485c95371a7cd38610a4b1e008dae09e7cc849842c0c941d146f372be9860c5",
+    "display_name": "Edge Stale",
+    "event_type": "candle",
+    "expected_first_ts": "2025-01-01T10:00:00.000Z",
+    "expected_last_ts": "2025-01-01T10:09:00.000Z",
+    "expected_rows": 10,
+    "fixture_path": "tests_fixtures/edge_stale.csv",
+    "manifest_path": null,
+    "notes": null,
+    "registered_at": "2026-08-11T19:35:17.311Z",
+    "symbols": [
+      "BTC_USDT"
+    ],
+    "tags": [
+      "edge",
+      "stale"
+    ],
+    "timeframes": [
+      "1m"
+    ]
+  },
+  {
+    "bundle_id": "small_3sym_1h_1m_candles",
+    "bundle_version": "1.0.0",
+    "checksum_sha256": "200d61107b716d260730cd38f2baee36348bd7930e90a06ffb531f1eae7335b8",
+    "display_name": "Small 3Sym 1H 1M Candles",
+    "event_type": "candle",
+    "expected_first_ts": "2026-08-10T10:00:00.000Z",
+    "expected_last_ts": "2026-08-10T10:59:00.000Z",
+    "expected_rows": 180,
+    "fixture_path": "tests_fixtures/small_3sym_1h_1m_candles.csv",
+    "manifest_path": null,
+    "notes": null,
+    "registered_at": "2026-08-11T19:35:17.322Z",
+    "symbols": [
+      "BTC_USDT",
+      "ETH_USDT",
+      "SOL_USDT"
+    ],
+    "tags": [
+      "happy"
+    ],
+    "timeframes": [
+      "1m"
+    ]
+  }
+]

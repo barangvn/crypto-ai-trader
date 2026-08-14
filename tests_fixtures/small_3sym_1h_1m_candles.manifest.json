@@ -1,0 +1,25 @@
+{
+  "bundle_id": "small_3sym_1h_1m_candles",
+  "bundle_version": "1.0.0",
+  "checksum_sha256": "200d61107b716d260730cd38f2baee36348bd7930e90a06ffb531f1eae7335b8",
+  "display_name": "Small 3Sym 1H 1M Candles",
+  "event_type": "candle",
+  "expected_first_ts": "2026-08-10T10:00:00.000Z",
+  "expected_last_ts": "2026-08-10T10:59:00.000Z",
+  "expected_rows": 180,
+  "fixture_path": "tests_fixtures/small_3sym_1h_1m_candles.csv",
+  "manifest_path": "tests_fixtures\\small_3sym_1h_1m_candles.manifest.json",
+  "notes": null,
+  "registered_at": "2026-08-11T19:35:17.322Z",
+  "symbols": [
+    "BTC_USDT",
+    "ETH_USDT",
+    "SOL_USDT"
+  ],
+  "tags": [
+    "happy"
+  ],
+  "timeframes": [
+    "1m"
+  ]
+}

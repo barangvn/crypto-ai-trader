@@ -1,0 +1,25 @@
+{
+  "bundle_id": "edge_abnormal_spread",
+  "bundle_version": "1.0.0",
+  "checksum_sha256": "8fdb67b901714cc34a13ebcc2bec188eceec2f103031e30a497254165ef2da0c",
+  "display_name": "Edge Abnormal Spread",
+  "event_type": "candle",
+  "expected_first_ts": "2026-08-10T10:00:00.000Z",
+  "expected_last_ts": "2026-08-10T10:02:00.000Z",
+  "expected_rows": 3,
+  "fixture_path": "tests_fixtures/edge_abnormal_spread.csv",
+  "manifest_path": "tests_fixtures\\edge_abnormal_spread.manifest.json",
+  "notes": null,
+  "registered_at": "2026-08-11T19:35:17.275Z",
+  "symbols": [
+    "BTC_USDT"
+  ],
+  "tags": [
+    "abnormal",
+    "edge",
+    "spread"
+  ],
+  "timeframes": [
+    "1m"
+  ]
+}
