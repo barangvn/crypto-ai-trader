@@ -6,12 +6,40 @@ from app.contracts.canonical import (
     QualityFlags,
     SchemaRef,
 )
+from app.contracts.exceptions import (
+    ContractSchemaError,
+    deep_copy,
+)
+from app.contracts.feature import (
+    FEATURE_SCHEMA_REGISTRY,
+    FeatureSchemaSpec,
+    FeatureVector,
+    LookbackWindowSpec,
+    register_feature_schema,
+    validate_feature_vector_features,
+)
 from app.contracts.market import (
     Candle,
     MarketTick,
     OrderBookSnapshot,
     OrderBookUpdate,
     TradeEvent,
+)
+from app.contracts.regime import (
+    MarketRegime,
+    MarketRegimeState,
+    REGIME_KEYS,
+    TimeRangeSpec,
+)
+from app.contracts.strategy import (
+    EligibilityContextView,
+    OpportunityScoreComponentPolicy,
+    PortfolioContextView,
+    SignalDirection,
+    StopPolicySpec,
+    StrategyContext,
+    StrategySignal,
+    TakeProfitPolicySpec,
 )
 from app.contracts.types import (
     ContractVersion,
@@ -56,4 +84,25 @@ __all__ = [
     "normalize_symbol",
     "validate_symbol_canonical",
     "now_instant",
+    # ————— S-CON-02A new contracts (appended — existing order preserved) —————
+    "ContractSchemaError",
+    "deep_copy",
+    "FEATURE_SCHEMA_REGISTRY",
+    "FeatureSchemaSpec",
+    "FeatureVector",
+    "LookbackWindowSpec",
+    "register_feature_schema",
+    "validate_feature_vector_features",
+    "MarketRegime",
+    "MarketRegimeState",
+    "REGIME_KEYS",
+    "TimeRangeSpec",
+    "PortfolioContextView",
+    "EligibilityContextView",
+    "OpportunityScoreComponentPolicy",
+    "SignalDirection",
+    "StopPolicySpec",
+    "TakeProfitPolicySpec",
+    "StrategyContext",
+    "StrategySignal",
 ]
