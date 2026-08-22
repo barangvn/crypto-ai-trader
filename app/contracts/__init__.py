@@ -9,6 +9,8 @@ from app.contracts.canonical import (
 from app.contracts.exceptions import (
     ContractSchemaError,
     deep_copy,
+    schema_sha256,
+    to_sorted_dict,
 )
 from app.contracts.feature import (
     FEATURE_SCHEMA_REGISTRY,
@@ -30,6 +32,27 @@ from app.contracts.regime import (
     MarketRegimeState,
     REGIME_KEYS,
     TimeRangeSpec,
+)
+from app.contracts.paper import (
+    PaperFill,
+    PaperOrder,
+    PaperOrderPolicyRefs,
+    PaperOrderSide,
+    PaperOrderStatus,
+    PaperOrderType,
+    TimeInForce,
+)
+from app.contracts.portfolio import (
+    PortfolioSnapshot,
+    Position,
+    PositionSide,
+)
+from app.contracts.risk import (
+    KillSwitchStateSpec,
+    LimitsSnapshot,
+    PositionSizingSpec,
+    RiskDecision,
+    RiskDecisionResult,
 )
 from app.contracts.strategy import (
     EligibilityContextView,
@@ -105,4 +128,22 @@ __all__ = [
     "TakeProfitPolicySpec",
     "StrategyContext",
     "StrategySignal",
+    # ————— S-CON-02B: RiskDecision + PaperOrder + PaperFill + Position + PortfolioSnapshot (appended END — preserved prior order) —————
+    "RiskDecisionResult",
+    "PositionSizingSpec",
+    "LimitsSnapshot",
+    "KillSwitchStateSpec",
+    "RiskDecision",
+    "PaperOrderSide",
+    "PaperOrderType",
+    "TimeInForce",
+    "PaperOrderStatus",
+    "PaperOrderPolicyRefs",
+    "PaperOrder",
+    "PaperFill",
+    "PositionSide",
+    "Position",
+    "PortfolioSnapshot",
+    "schema_sha256",
+    "to_sorted_dict",
 ]
