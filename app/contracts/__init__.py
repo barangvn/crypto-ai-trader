@@ -54,6 +54,23 @@ from app.contracts.risk import (
     RiskDecision,
     RiskDecisionResult,
 )
+from app.contracts.opportunity import (
+    OpportunityScore,
+)
+from app.contracts.model import (
+    CCWinnerEnum,
+    ChampionChallengerEvaluation,
+    DatasetKindEnum,
+    ModelCompatibilityRef,
+    ModelEvaluation,
+    ModelLifecycleStatus,
+    ModelLifecycleTransition,
+    ModelPurposeEnum,
+    ModelRef,
+    ModelVersion,
+    PromotionGateResult,
+    TrainingDataRange,
+)
 from app.contracts.strategy import (
     EligibilityContextView,
     OpportunityScoreComponentPolicy,
@@ -146,4 +163,18 @@ __all__ = [
     "PortfolioSnapshot",
     "schema_sha256",
     "to_sorted_dict",
+    # ————— S-CON-02C: OpportunityScore + Model Lifecycle + Champion/Challenger (appended END — prior order preserved) —————
+    "OpportunityScore",
+    "ModelLifecycleStatus",
+    "ModelPurposeEnum",
+    "DatasetKindEnum",
+    "CCWinnerEnum",
+    "TrainingDataRange",
+    "ModelCompatibilityRef",
+    "PromotionGateResult",
+    "ModelRef",
+    "ModelVersion",
+    "ModelEvaluation",
+    "ModelLifecycleTransition",
+    "ChampionChallengerEvaluation",
 ]

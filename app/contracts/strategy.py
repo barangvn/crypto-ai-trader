@@ -28,7 +28,7 @@ from app.contracts.types import (
 
 _STRATEGY_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _VERSION_RE = re.compile(r"^[a-zA-Z0-9_.\-+]+$")
-_ULIDISH_RE = re.compile(r"^[A-Za-z0-9\-]{8,}$")  # ULID 26 chars or 36-char UUID-style dashed; accept >=8 basic alpha-num + dash
+_ULIDISH_RE = re.compile(r"^[A-Za-z0-9_\-]{8,}$")  # ULID 26 chars or 36-char UUID-style dashed; accept >=8 basic alpha-num + dash + underscore
 
 
 # ---------------------------------------------------------------------------

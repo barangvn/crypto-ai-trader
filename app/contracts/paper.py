@@ -18,7 +18,7 @@ from app.contracts.types import (
 )
 
 
-_ULIDISH_RE = re.compile(r"^[A-Za-z0-9\-]{8,}$")
+_ULIDISH_RE = re.compile(r"^[A-Za-z0-9_\-]{8,}$")
 _STRATEGY_ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _VERSION_RE = re.compile(r"^[a-zA-Z0-9_.\-+]+$")
 
