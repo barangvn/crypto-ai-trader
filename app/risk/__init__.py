@@ -1,4 +1,4 @@
-"""app.risk package (S-RSK-01 Independent Risk Engine)."""
+"""app.risk package (S-RSK-01 Independent Risk Engine + S-RSK-02 Gate Enforcement)."""
 from app.risk.base import (
     DEFAULT_WEIGHTS,
     DEFAULTS,
@@ -8,8 +8,27 @@ from app.risk.base import (
     RiskScoreWeights,
     evaluate_risk,
 )
+from app.risk.gate import (
+    DEFAULT_IDEMPOTENCY_MAX_ENTRIES,
+    DEFAULT_OVERSIZE_TOLERANCE_BPS,
+    DEFAULT_STALE_DECISION_THRESHOLD_SEC,
+    EVENT_TYPE_PAPER_ORDER_BLOCKED,
+    EVENT_TYPE_PAPER_ORDER_CREATED,
+    EVENT_TYPE_RISK_DECISION_PUBLISHED,
+    ClockRef,
+    DecisionRegistry,
+    DeterministicClock,
+    GATE_VERSION_RSK02,
+    GateOptions,
+    GateResult,
+    InMemoryDecisionRegistry,
+    PaperOrderGateRequest,
+    RiskDecisionToPaperOrderGate,
+    register_gate_subscriber,
+)
 
 __all__ = [
+    # ---- S-RSK-01 Independent Risk Engine (order preserved — DO NOT REORDER)
     "IndependentRiskEngine",
     "RiskEngineDefaults",
     "RiskScoreWeights",
@@ -17,4 +36,21 @@ __all__ = [
     "evaluate_risk",
     "DEFAULT_WEIGHTS",
     "DEFAULTS",
+    # ---- S-RSK-02 CAP-4 Gate Enforcement (APPEND only — DO NOT INSERT ABOVE)
+    "GATE_VERSION_RSK02",
+    "DEFAULT_STALE_DECISION_THRESHOLD_SEC",
+    "DEFAULT_OVERSIZE_TOLERANCE_BPS",
+    "DEFAULT_IDEMPOTENCY_MAX_ENTRIES",
+    "EVENT_TYPE_RISK_DECISION_PUBLISHED",
+    "EVENT_TYPE_PAPER_ORDER_CREATED",
+    "EVENT_TYPE_PAPER_ORDER_BLOCKED",
+    "PaperOrderGateRequest",
+    "GateOptions",
+    "GateResult",
+    "DecisionRegistry",
+    "InMemoryDecisionRegistry",
+    "ClockRef",
+    "DeterministicClock",
+    "RiskDecisionToPaperOrderGate",
+    "register_gate_subscriber",
 ]

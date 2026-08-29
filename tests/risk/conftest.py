@@ -246,3 +246,244 @@ def engine() -> IndependentRiskEngine:
 @pytest.fixture()
 def typed_bus() -> InMemoryTypedEventBus:
     return InMemoryTypedEventBus()
+
+
+# ================================================================
+# S-RSK-02 (CAP-4 Gate Enforcement) — fixtures SONUNA — DOKUNMA
+# ================================================================
+
+from app.contracts.paper import PaperOrderPolicyRefs, PaperOrderSide, PaperOrderType
+from app.contracts.risk import PositionSizingSpec, RiskDecision
+from app.risk import (
+    ClockRef,
+    DecisionRegistry,
+    DeterministicClock,
+    GateOptions,
+    InMemoryDecisionRegistry,
+    PaperOrderGateRequest,
+    RiskDecisionToPaperOrderGate,
+)
+
+
+SR02_BASE_TS: Instant = "2026-03-18T12:00:00.000Z"
+SR02_CORR: str = "sr02_corr_base_0001"
+SR02_RD_ID: str = "sr02_rd_base_rdid_0099"
+SR02_CAUS_PREV: str = "sr02_prev_oppscore_88"
+SR02_SYM: Symbol = "BTC_USDT"
+
+ONE_MS_BEFORE = "2026-03-18T12:04:29.999Z"
+EXACT_VALID_UNTIL = "2026-03-18T12:04:30.000Z"
+ONE_MS_AFTER = "2026-03-18T12:04:30.001Z"
+AT_299s = "2026-03-18T12:04:59.000Z"
+AT_300s = "2026-03-18T12:05:00.000Z"
+AT_301s = "2026-03-18T12:05:01.000Z"
+
+
+@pytest.fixture()
+def sr02_deterministic_clock() -> DeterministicClock:
+    return DeterministicClock(SR02_BASE_TS)
+
+
+@pytest.fixture()
+def sr02_clean_limits() -> LimitsSnapshot:
+    return LimitsSnapshot(
+        max_position_notional_per_symbol=Decimal("10000"),
+        max_exposure_notional_total=Decimal("50000"),
+        max_daily_loss_notional=Decimal("-1000"),
+        max_drawdown_pct=0.20,
+        max_consecutive_losses=5,
+        max_leverage_allowed=1,
+        current_exposure_notional=Decimal("8000"),
+        current_daily_pnl=Decimal("-200"),
+        current_drawdown_pct=0.05,
+        current_consecutive_losses=1,
+    )
+
+
+@pytest.fixture()
+def sr02_clean_ks_no_kill() -> KillSwitchStateSpec:
+    return KillSwitchStateSpec(global_kill=False, per_symbol={}, reason=None)
+
+
+@pytest.fixture()
+def sr02_clean_position_sizing() -> PositionSizingSpec:
+    return PositionSizingSpec(
+        base_qty=Decimal("0.01"),
+        quote_qty=Decimal("1000"),
+        notional=Decimal("1000"),
+        method="min_of_five",
+    )
+
+
+def _bypass_rd(
+    *,
+    decision=RiskDecisionResult.APPROVED,
+    decision_id: str = SR02_RD_ID,
+    correlation_id: str = SR02_CORR,
+    causation_id: str = SR02_CAUS_PREV,
+    valid_until: str = "2026-03-18T12:04:30.000Z",
+    ks: KillSwitchStateSpec | None = None,
+    limits: LimitsSnapshot | None = None,
+    ps: PositionSizingSpec | None = None,
+    reason_codes: list[str] | None = None,
+) -> RiskDecision:
+    """Create RiskDecision, bypassing AD-11 __post_init__ invariants for G06A test scenarios.
+
+    We construct RiskDecision using object.__new__ to skip ContractSchemaError raised
+    by __post_init__ for combinations that the gate explicitly re-checks via G06 for
+    defense-in-depth coverage (e.g. global_kill=True + approved).
+    """
+    if ks is None:
+        ks = KillSwitchStateSpec(global_kill=False, per_symbol={}, reason=None)
+    if limits is None:
+        limits = LimitsSnapshot(
+            max_position_notional_per_symbol=Decimal("10000"),
+            max_exposure_notional_total=Decimal("50000"),
+            max_daily_loss_notional=Decimal("-1000"),
+            max_drawdown_pct=0.20,
+            max_consecutive_losses=5,
+            max_leverage_allowed=1,
+            current_exposure_notional=Decimal("8000"),
+            current_daily_pnl=Decimal("-200"),
+            current_drawdown_pct=0.05,
+            current_consecutive_losses=1,
+        )
+    if ps is None:
+        ps = PositionSizingSpec(
+            base_qty=Decimal("0.01"),
+            quote_qty=Decimal("1000"),
+            notional=(Decimal("1000") if decision == RiskDecisionResult.APPROVED else Decimal("0")),
+            method="min_of_five",
+        )
+    if reason_codes is None:
+        reason_codes = []
+    # Force-decimal invariant by-pass:
+    obj = object.__new__(RiskDecision)
+    obj.decision_id = decision_id
+    obj.decision = decision
+    obj.reason_codes = list(reason_codes)
+    obj.position_sizing = ps
+    obj.limits_snapshot = limits
+    obj.kill_switch_state = ks
+    obj.valid_until = valid_until
+    obj.correlation_id = correlation_id
+    obj.causation_id = causation_id
+    obj.stop_loss_ref = None
+    obj.take_profit_ref = None
+    obj.approval_chain = []
+    # created_ts (not a field on contract; we attach for gate G08A age-ability
+    try:
+        obj.created_ts = SR02_BASE_TS  # type: ignore[attr-defined]
+    except Exception:
+        pass
+    return obj
+
+
+@pytest.fixture()
+def sr02_approved_rd(sr02_clean_ks_no_kill, sr02_clean_limits, sr02_clean_position_sizing):
+    return _bypass_rd(
+        decision=RiskDecisionResult.APPROVED,
+        ks=sr02_clean_ks_no_kill,
+        limits=sr02_clean_limits,
+        ps=sr02_clean_position_sizing,
+        reason_codes=[],
+    )
+
+
+@pytest.fixture()
+def sr02_rejected_rd(sr02_clean_ks_no_kill, sr02_clean_limits):
+    ps = PositionSizingSpec(base_qty=None, quote_qty=None, notional=Decimal("0"), method="reject_fallback")
+    return _bypass_rd(
+        decision=RiskDecisionResult.REJECTED,
+        decision_id=SR02_RD_ID + "_rej",
+        ks=sr02_clean_ks_no_kill,
+        limits=sr02_clean_limits,
+        ps=ps,
+        reason_codes=["R03_LIMIT_EXCEEDED", "R12_POSITION_LIMIT"],
+    )
+
+
+def _sr02_request(
+    *,
+    symbol: str = SR02_SYM,
+    side=PaperOrderSide.BUY,
+    order_type=PaperOrderType.MARKET,
+    qty: Decimal = Decimal("0.01"),
+    notional: Decimal = Decimal("1000"),
+    price: Decimal | None = None,
+    risk_decision_id: str = SR02_RD_ID,
+    correlation_id: str = SR02_CORR,
+    causation_id: str = SR02_CAUS_PREV,
+    position_intent: str = "OPEN_NEW",
+) -> PaperOrderGateRequest:
+    refs = PaperOrderPolicyRefs(
+        risk_decision_id=risk_decision_id,
+        strategy_id="trend",
+        strategy_version="str_01_v1",
+    )
+    # request.causation_id by default caller-provided; gate expects request.causation_id
+    # (to be kept as caller side; GateResult.causation_id will = rd.decision_id
+    return PaperOrderGateRequest(
+        symbol=symbol,
+        side=side,
+        order_type=order_type,
+        requested_qty_base=qty,
+        requested_notional_quote=notional,
+        requested_price=price,
+        policy_refs=refs,
+        correlation_id=correlation_id,
+        causation_id=causation_id,
+        position_intent=position_intent,
+    )
+
+
+@pytest.fixture()
+def sr02_happy_request() -> PaperOrderGateRequest:
+    return _sr02_request()
+
+
+@pytest.fixture()
+def sr02_registry_approved(sr02_approved_rd) -> InMemoryDecisionRegistry:
+    reg = InMemoryDecisionRegistry()
+    reg.register(SR02_CORR, SR02_RD_ID, sr02_approved_rd)
+    return reg
+
+
+@pytest.fixture()
+def sr02_registry_rejected(sr02_rejected_rd) -> InMemoryDecisionRegistry:
+    reg = InMemoryDecisionRegistry()
+    reg.register(SR02_CORR, SR02_RD_ID + "_rej", sr02_rejected_rd)
+    return reg
+
+
+@pytest.fixture()
+def sr02_gate(sr02_registry_approved, sr02_deterministic_clock) -> RiskDecisionToPaperOrderGate:
+    return RiskDecisionToPaperOrderGate(
+        sr02_registry_approved,
+        clock=sr02_deterministic_clock,
+    )
+
+
+@pytest.fixture()
+def sr02_gate_rejected(sr02_registry_rejected, sr02_deterministic_clock) -> RiskDecisionToPaperOrderGate:
+    return RiskDecisionToPaperOrderGate(
+        sr02_registry_rejected,
+        clock=sr02_deterministic_clock,
+    )
+
+
+@pytest.fixture()
+def sr02_gate_empty(sr02_deterministic_clock) -> RiskDecisionToPaperOrderGate:
+    return RiskDecisionToPaperOrderGate(
+        InMemoryDecisionRegistry(),
+        clock=sr02_deterministic_clock,
+    )
+
+
+@pytest.fixture()
+def sr02_gate_opts() -> GateOptions:
+    return GateOptions(
+        stale_threshold_sec=60.0,
+        oversize_tolerance_bps=20,
+    )
+

@@ -34,6 +34,7 @@ def _iter_py_files(root_dir: str):
                 "test_bus_no_credentials.py",
                 "test_sopp01_21_credential_safety.py",
                 "test_sopp01_24_safety_boundary.py",
+                "test_srsk02_13_safety_regression_ast.py",
             }:
                 continue
             yield os.path.join(root, f)
