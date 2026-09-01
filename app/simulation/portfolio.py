@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal, ROUND_HALF_EVEN
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.contracts import (
     CONTRACT_VERSION,
@@ -1037,4 +1037,355 @@ class PortfolioSnapshotEngine:
                 clock_ref=ClockRef(wall=Instant(snapshot_ts)) if snapshot_ts else None,
             )
         return result
+
+
+# ---------------------------------------------------------------------------
+# S-PTF-03 — Deterministic 24h Rolling Performance & PnL
+# (append-only — S-PTF-01 / S-PTF-02 kaynak kodu yukarıda DEĞİŞMEDİ)
+# ---------------------------------------------------------------------------
+
+WINDOW_SECONDS_24H: int = 86_400
+WINDOW_MS_24H: int = 86_400_000
+CORR_UNKNOWN_ROLLING: str = "CORR_UNKNOWN_ROLLING_SPTF03"
+CAUS_UNKNOWN_ROLLING: str = "CAUS_UNKNOWN_ROLLING_SPTF03"
+
+INFO_EMPTY_WINDOW = "EMPTY_WINDOW"
+INFO_ZERO_BASELINE_EQUITY = "ZERO_BASELINE_EQUITY"
+INFO_INVALID_SAMPLES_EXCLUDED = "INVALID_SAMPLES_EXCLUDED"
+INFO_STALE_SAMPLES_INCLUDED = "STALE_SAMPLES_INCLUDED"
+INFO_INTERNAL_CALCULATION_ERROR = "INTERNAL_CALCULATION_ERROR"
+INFO_NO_INTERPOLATION = "NO_INTERPOLATION_MISSING_SAMPLES"
+INFO_NEGATIVE_FEES_DELTA_CLAMPED = "NEGATIVE_FEES_DELTA_CLAMPED"
+INFO_DUP_SNAPSHOT_ID_DROPPED = "DUP_SNAPSHOT_ID_DROPPED"
+
+
+def _epoch_ms_from_instant(instant: Instant) -> int:
+    """Instant string -> epoch milliseconds (UTC). Real clock YOK.
+
+    ISO-8601: 2026-01-15T12:34:56.789Z.
+    """
+    if not isinstance(instant, str) or not instant:
+        raise ContractSchemaError(f"Invalid Instant (empty str): {instant!r}")
+    s = instant
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    from datetime import datetime, timezone
+    if "+" not in s and s.count("-") < 3:
+        s = s + "+00:00"
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    dt_utc = dt.astimezone(timezone.utc)
+    return int(dt_utc.timestamp() * 1000)
+
+
+@dataclass(frozen=True, slots=False)
+class Rolling24Result:
+    """S-PTF-03 rolling 24h çıktısı (app/simulation içinde helper — app/contracts altında DEĞİL.
+    §8 user: yeni contract ZORLA OLUŞTURULMAZ.
+    """
+    rolling_realized_pnl_quote_24h: Decimal
+    rolling_fees_quote_24h: Decimal
+    rolling_return_pct: float
+    rolling_peak_equity_quote: Decimal
+    rolling_drawdown_pct: float
+    exposure_max_24h: Decimal
+    exposure_avg_24h: Decimal
+    exposure_end_24h: Decimal
+    window_samples_count: int
+    window_start_ts: Instant | None
+    window_end_ts: Instant | None
+    correlation_id: ULID
+    causation_id: ULID
+    info_codes: Tuple[str, ...]
+    parent_event_type: str = "portfolio_snapshot.v1"
+
+    def to_sorted_dict(self) -> Dict[str, Any]:
+        keys = sorted(self.__dict__.keys())
+        out: Dict[str, Any] = {}
+        for k in keys:
+            v = getattr(self, k)
+            if isinstance(v, Decimal):
+                out[k] = str(v)
+            elif isinstance(v, tuple):
+                out[k] = list(str(x) for x in v)
+            elif isinstance(v, type(None)):
+                out[k] = None
+            else:
+                out[k] = v
+        return out
+
+    def schema_sha256(self) -> str:
+        import hashlib
+        import json
+        return hashlib.sha256(
+            json.dumps(self.to_sorted_dict(), sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+
+
+def _empty_rolling_safe(end_ts: Instant | None, samples_raw: List[PortfolioSnapshot], info_extra: List[str]) -> Rolling24Result:
+    # ADN-PTF03-04: empty corr/caus fallback
+    corr = CORR_UNKNOWN_ROLLING
+    caus = CAUS_UNKNOWN_ROLLING
+    try:
+        valid_samples: List[PortfolioSnapshot] = []
+        for s in (samples_raw or []):
+            try:
+                if s is not None and hasattr(s, "ts") and hasattr(s, "snapshot_id"):
+                    valid_samples.append(s)
+            except BaseException:
+                # hasattr içinde exception raise eden nesne (BadSnap) atla
+                continue
+        if valid_samples:
+            try:
+                newest = max(valid_samples, key=lambda s: (_epoch_ms_from_instant(s.ts), s.snapshot_id))
+                corr = newest.correlation_id
+                caus = newest.causation_id
+            except Exception:
+                pass
+    except BaseException:
+        pass
+    info_codes = sorted(set(info_extra))
+    return Rolling24Result(
+        rolling_realized_pnl_quote_24h=Decimal("0"),
+        rolling_fees_quote_24h=Decimal("0"),
+        rolling_return_pct=0.0,
+        rolling_peak_equity_quote=Decimal("0"),
+        rolling_drawdown_pct=0.0,
+        exposure_max_24h=Decimal("0"),
+        exposure_avg_24h=Decimal("0"),
+        exposure_end_24h=Decimal("0"),
+        window_samples_count=0,
+        window_start_ts=None,
+        window_end_ts=end_ts,
+        correlation_id=corr,
+        causation_id=caus,
+        info_codes=tuple(info_codes),
+    )
+
+
+def build_rolling_24h(
+    *,
+    snapshot_samples: List[PortfolioSnapshot] | None,
+    end_ts: Instant,
+) -> Rolling24Result:
+    """S-PTF-03 pure deterministic rolling 24h hesap (5 faz).
+
+    Gerçek clock YOK. `end_ts` dışarıdan UTC Instant argüman.
+    """
+    info_codes_accum: List[str] = []
+    try:
+        # Phase G1: Input guards ---------------------------------------------
+        if end_ts is None or not isinstance(end_ts, str) or not validate_instant(end_ts):
+            return _empty_rolling_safe(None, snapshot_samples or [], [INFO_INTERNAL_CALCULATION_ERROR])
+        try:
+            end_ms = _epoch_ms_from_instant(end_ts)
+        except Exception:
+            return _empty_rolling_safe(end_ts, snapshot_samples or [], [INFO_INTERNAL_CALCULATION_ERROR])
+        samples_raw: List[PortfolioSnapshot] = list(snapshot_samples or [])
+
+        # Phase N2: Normalize / Sort / Dedup (OoO + snapshot_id KEEP FIRST) ---
+        # deep copy — orijinal list MUTATE ETME
+        working: List[PortfolioSnapshot] = list(samples_raw)
+        try:
+            working.sort(key=lambda s: (_epoch_ms_from_instant(s.ts), s.snapshot_id))
+        except Exception:
+            return _empty_rolling_safe(end_ts, samples_raw, [INFO_INTERNAL_CALCULATION_ERROR])
+        # dedup same snapshot_id (ADN-PTF03-01: KEEP FIRST)
+        seen_ids: set[str] = set()
+        deduped: List[PortfolioSnapshot] = []
+        for s in working:
+            if s.snapshot_id in seen_ids:
+                info_codes_accum.append(INFO_DUP_SNAPSHOT_ID_DROPPED)
+                continue
+            seen_ids.add(s.snapshot_id)
+            deduped.append(s)
+        working = deduped
+
+        # Q filter (ADN-PTF03-02): invalid / quarantined / missing → dışarıda
+        filtered_q: List[PortfolioSnapshot] = []
+        invalid_excluded = False
+        stale_included = False
+        for s in working:
+            qf = getattr(s, "quality_flags", None)
+            if qf is not None:
+                if getattr(qf, "invalid", False) or getattr(qf, "quarantined", False) or getattr(qf, "missing", False):
+                    invalid_excluded = True
+                    continue
+                if getattr(qf, "stale", False):
+                    stale_included = True
+            filtered_q.append(s)
+        if invalid_excluded:
+            info_codes_accum.append(INFO_INVALID_SAMPLES_EXCLUDED)
+        if stale_included:
+            info_codes_accum.append(INFO_STALE_SAMPLES_INCLUDED)
+        info_codes_accum.append(INFO_NO_INTERPOLATION)
+        working = filtered_q
+
+        # Phase W3: Window filter --------------------------------------------
+        window_samples: List[PortfolioSnapshot] = []
+        for s in working:
+            try:
+                s_ms = _epoch_ms_from_instant(s.ts)
+            except Exception:
+                continue
+            diff = end_ms - s_ms
+            if 0 <= diff <= WINDOW_MS_24H:
+                window_samples.append(s)
+
+        if not window_samples:
+            info_codes_accum.append(INFO_EMPTY_WINDOW)
+            return _empty_rolling_safe(end_ts, samples_raw, info_codes_accum)
+
+        # Phase A4: Aggregation ---------------------------------------------
+        first_sample = window_samples[0]
+        last_sample = window_samples[-1]
+        # realized delta
+        realized_delta = (last_sample.realized_pnl_quote_24h - first_sample.realized_pnl_quote_24h).quantize(
+            _QUANTIZE_8DP, rounding=ROUND_HALF_EVEN
+        )
+        # fees delta + neg clamp ADN-PTF03-03
+        fees_delta_raw = last_sample.fees_quote_total - first_sample.fees_quote_total
+        if fees_delta_raw < 0:
+            fees_delta = Decimal("0")
+            info_codes_accum.append(INFO_NEGATIVE_FEES_DELTA_CLAMPED)
+        else:
+            fees_delta = fees_delta_raw.quantize(_QUANTIZE_8DP, rounding=ROUND_HALF_EVEN)
+        # return
+        start_equity = first_sample.equity_quote
+        end_equity = last_sample.equity_quote
+        if start_equity <= 0:
+            return_pct = 0.0
+            info_codes_accum.append(INFO_ZERO_BASELINE_EQUITY)
+        else:
+            try:
+                nom = float((end_equity - start_equity) / start_equity)
+                # nan/inf guard — float safe
+                import math
+                if math.isnan(nom) or math.isinf(nom):
+                    return_pct = 0.0
+                else:
+                    return_pct = float(nom)
+            except Exception:
+                return_pct = 0.0
+        # rolling peak (TAMAMEN BAĞIMSIZ — S-PTF-02 peak_equity_quote KULLANILMAZ)
+        rolling_peak = max((s.equity_quote for s in window_samples), default=Decimal("0"))
+        if rolling_peak > 0:
+            try:
+                import math
+                dd_nom = float((rolling_peak - last_sample.equity_quote) / rolling_peak)
+                if math.isnan(dd_nom) or math.isinf(dd_nom):
+                    rolling_dd = 0.0
+                else:
+                    rolling_dd = float(max(0.0, min(1.0, dd_nom)))
+            except Exception:
+                rolling_dd = 0.0
+        else:
+            rolling_dd = 0.0
+        # exposure 3'lü
+        expo_list = [s.exposure_notional for s in window_samples]
+        exposure_max = max(expo_list)
+        # avg
+        if expo_list:
+            total = sum(expo_list, Decimal("0"))
+            count_d = Decimal(len(expo_list))
+            exposure_avg = (total / count_d).quantize(_QUANTIZE_8DP, rounding=ROUND_HALF_EVEN)
+        else:
+            exposure_avg = Decimal("0")
+        exposure_end = last_sample.exposure_notional
+        # corr/caus: AD-17 chain
+        corr_id = last_sample.correlation_id
+        caus_id = last_sample.causation_id
+        info_final = sorted(set(info_codes_accum))
+        # positions symbol ASC kontrolü (AD-20 multi-symbol determinizm — her sample için zaten upstream S-PTF-02 guarantee ediyor, burada ek deterministic invariant kontrolü yok, sadece veri korundu)
+        return Rolling24Result(
+            rolling_realized_pnl_quote_24h=realized_delta,
+            rolling_fees_quote_24h=fees_delta,
+            rolling_return_pct=return_pct,
+            rolling_peak_equity_quote=rolling_peak,
+            rolling_drawdown_pct=rolling_dd,
+            exposure_max_24h=exposure_max,
+            exposure_avg_24h=exposure_avg,
+            exposure_end_24h=exposure_end,
+            window_samples_count=len(window_samples),
+            window_start_ts=window_samples[0].ts,
+            window_end_ts=last_sample.ts,
+            correlation_id=corr_id,
+            causation_id=caus_id,
+            info_codes=tuple(info_final),
+        )
+    except BaseException:
+        # AD-19 fail-closed
+        samples_safe = list(snapshot_samples or [])
+        return _empty_rolling_safe(
+            end_ts if (isinstance(end_ts, str) and validate_instant(end_ts)) else None,
+            samples_safe,
+            [INFO_INTERNAL_CALCULATION_ERROR],
+        )
+
+
+@dataclass
+class RollingPerformanceEngine:
+    """S-PTF-03 EventBus tüketici engine.
+
+    publish_enabled default False (ADN-PTF03-05).
+    """
+    event_bus: Optional[InMemoryTypedEventBus] = None
+    publish_enabled: bool = False
+    rolling_results: List[Rolling24Result] = field(default_factory=list)
+
+    def subscribe(self) -> None:
+        if self.event_bus is None:
+            return
+
+        def _on_snapshot(payload: Any) -> None:
+            try:
+                snap: PortfolioSnapshot
+                if isinstance(payload, PortfolioSnapshot):
+                    snap = payload
+                elif isinstance(payload, dict) and "new_snapshot" in payload:
+                    snap = payload["new_snapshot"]
+                    if not isinstance(snap, PortfolioSnapshot):
+                        return
+                elif isinstance(payload, PortfolioSnapshot):
+                    snap = payload
+                else:
+                    # envelope check
+                    env = getattr(payload, "payload", None) or payload
+                    if isinstance(env, PortfolioSnapshot):
+                        snap = env
+                    else:
+                        return
+                end_ts = snap.ts
+                # Kendi self.rolling_results veya diğer subscriber snapshot history — bu engine SADECE current + snapshot payload alır; uzun tarihçe caller tarafından build_rolling_24h snapshot_samples liste ile sağlanır.
+                # Basit consumer: portfolio_snapshot.v1 geldiğinde, caller sample listesini dışarıdan verdiği için, burada sadece trigger (örnek) — gerçek 24h hesaplaması build_rolling_24h() pure fonksiyonu dışarıdan çağrılır. Bu engine opsiyonel EventBus helper'dır.
+                _ = (snap, end_ts)
+            except Exception:
+                pass  # DLQ üst bus tarafından yönetilir (S-PLN-01)
+
+        if self.event_bus is not None:
+            try:
+                self.event_bus.subscribe_typed("portfolio_snapshot.v1", _on_snapshot)
+            except Exception:
+                pass
+
+
+__all__ = list(getattr(__builtins__ if False else globals(), "__all__", [])) + [  # type: ignore[attr-defined]
+    "WINDOW_SECONDS_24H",
+    "WINDOW_MS_24H",
+    "CORR_UNKNOWN_ROLLING",
+    "CAUS_UNKNOWN_ROLLING",
+    "INFO_EMPTY_WINDOW",
+    "INFO_ZERO_BASELINE_EQUITY",
+    "INFO_INVALID_SAMPLES_EXCLUDED",
+    "INFO_STALE_SAMPLES_INCLUDED",
+    "INFO_INTERNAL_CALCULATION_ERROR",
+    "INFO_NO_INTERPOLATION",
+    "INFO_NEGATIVE_FEES_DELTA_CLAMPED",
+    "INFO_DUP_SNAPSHOT_ID_DROPPED",
+    "Rolling24Result",
+    "build_rolling_24h",
+    "RollingPerformanceEngine",
+]
+
 
