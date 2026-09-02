@@ -688,7 +688,10 @@ def _build_portfolio_snapshot_inner(
         return _make_snapshot_reject(reason_code=PS_G1_INVALID, reason_detail="current_price_map not dict")
     for key, value in current_price_map.items():
         try:
-            sym = Symbol(key) if not isinstance(key, Symbol) else key
+            if isinstance(key, str):
+                sym = Symbol(key)
+            else:
+                sym = key
             if not validate_symbol_canonical(sym):
                 return _make_snapshot_reject(reason_code=PS_G1_INVALID, reason_detail=f"price_map key not canonical symbol: {key!r}")
         except BaseException:
