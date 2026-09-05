@@ -288,7 +288,7 @@ def _split_events_for_windows(
     return events[:train_end], events[train_end:val_end], events[val_end:]
 
 
-@dataclass(slots=True)
+@dataclass(slots=False)
 class BacktestRunner:
     assumptions: BacktestAssumptions
     fill_config: FillAssumptionsConfig = field(default_factory=FillAssumptionsConfig)
@@ -298,6 +298,24 @@ class BacktestRunner:
     validation_ratio: float = 0.2
     strategy_engine: str = "trend"
     run_notes: list[str] = field(default_factory=list)
+    cost_overrides: Any = None
+    cost_overrides_fold: Any = None
+    walk_forward_single_fold: Any = None
+
+    @property
+    def _defaults_fill_config(self) -> FillAssumptionsConfig:
+        return FillAssumptionsConfig()
+
+    def __post_init__(self):
+        from .cost_injection import CostModelOverrides, apply_cost_overrides, validate_cost_overrides
+        base_cfg = self.fill_config
+        if self.cost_overrides is not None:
+            validate_cost_overrides(self.cost_overrides)
+            base_cfg = apply_cost_overrides(base_cfg, self.cost_overrides)
+        if self.cost_overrides_fold is not None:
+            validate_cost_overrides(self.cost_overrides_fold)
+            base_cfg = apply_cost_overrides(base_cfg, self.cost_overrides_fold)
+        object.__setattr__(self, "fill_config", base_cfg)
 
     def _iter_bundle_events(
         self,
@@ -378,6 +396,7 @@ class BacktestRunner:
         bundle: Any,
         *,
         run_id: str | None = None,
+        fold_backtest_window_split_override: Any = None,
     ) -> BacktestRunResult:
         det_seed = f"{getattr(bundle, 'bundle_id', 'sbkt')}|{getattr(bundle, 'bundle_version', 'x')}|{getattr(bundle, 'compute_sha256', lambda: '0')()}"
         actual_run_id = run_id or _runner_ulid_new(det_seed, counter=0)
@@ -389,14 +408,21 @@ class BacktestRunner:
         if self.enforce_order_strict:
             verify_event_ordering_strict(sorted_events)
 
-        train_events, val_events, test_events = _split_events_for_windows(
-            sorted_events,
-            train_ratio=self.train_ratio,
-            validation_ratio=self.validation_ratio,
-        )
-        window_split = self._build_window_split(
-            sorted_events, train_events, val_events, test_events
-        )
+        window_split_override = fold_backtest_window_split_override or self.walk_forward_single_fold
+        if window_split_override is not None and isinstance(window_split_override, BacktestWindowSplit):
+            window_split = window_split_override
+            train_events = sorted_events
+            val_events: list[Any] = []
+            test_events: list[Any] = []
+        else:
+            train_events, val_events, test_events = _split_events_for_windows(
+                sorted_events,
+                train_ratio=self.train_ratio,
+                validation_ratio=self.validation_ratio,
+            )
+            window_split = self._build_window_split(
+                sorted_events, train_events, val_events, test_events
+            )
 
         market_count = 0
         feature_count = 0
@@ -579,6 +605,13 @@ class BacktestRunner:
             "overlap_free_splits": window_split.overlap_free if window_split else True,
             "fail_closed_enabled": True,
         }
+        try:
+            from .cost_injection import cost_overrides_manifest
+            base_fill = FillAssumptionsConfig()
+            cost_manifest = cost_overrides_manifest(base_fill, self.cost_overrides, self.cost_overrides_fold)
+            provenance["cost_model_manifest"] = cost_manifest
+        except BaseException:
+            pass
 
         result = BacktestRunResult(
             metadata=metadata,

@@ -18,6 +18,58 @@ BACKTEST_ASSUMPTIONS_VERSION: Literal["1.0.0"] = "1.0.0"
 WINDOW_SPLIT_VERSION: Literal["1.0.0"] = "1.0.0"
 
 
+def _instant_compare(a: str, b: str) -> int:
+    try:
+        ai = int(a)
+        bi = int(b)
+        if ai < bi:
+            return -1
+        if ai > bi:
+            return 1
+        return 0
+    except (ValueError, TypeError):
+        pass
+    try:
+        fa = float(a)
+        fb = float(b)
+        if fa < fb:
+            return -1
+        if fa > fb:
+            return 1
+        return 0
+    except (ValueError, TypeError):
+        pass
+    if a < b:
+        return -1
+    if a > b:
+        return 1
+    return 0
+
+
+def _instant_lte(a: str, b: str) -> bool:
+    return _instant_compare(a, b) <= 0
+
+
+def _instant_gte(a: str, b: str) -> bool:
+    return _instant_compare(a, b) >= 0
+
+
+def _instant_gt(a: str, b: str) -> bool:
+    return _instant_compare(a, b) > 0
+
+
+def _instant_key(a: str) -> tuple[int, int] | tuple[int, float] | tuple[int, str]:
+    try:
+        return (0, int(a))
+    except (ValueError, TypeError):
+        pass
+    try:
+        return (1, float(a))
+    except (ValueError, TypeError):
+        pass
+    return (2, a)
+
+
 class SplitDataset(StrEnum):
     TRAIN = "train"
     VALIDATION = "validation"
@@ -36,7 +88,7 @@ class WindowSplit:
             raise ValueError("WindowSplit.start_instant must be non-empty str")
         if not isinstance(self.end_instant, str) or not self.end_instant:
             raise ValueError("WindowSplit.end_instant must be non-empty str")
-        if self.start_instant > self.end_instant:
+        if _instant_gt(self.start_instant, self.end_instant):
             raise ValueError("WindowSplit.start_instant must be <= end_instant")
         if not isinstance(self.event_count, int) or self.event_count < 0:
             raise ValueError("WindowSplit.event_count must be non-negative int")
@@ -70,9 +122,9 @@ class BacktestWindowSplit:
             windows.append(self.test)
         if len(windows) < 1:
             raise ValueError("BacktestWindowSplit requires at least one split")
-        windows_sorted = sorted(windows, key=lambda w: w.start_instant)
+        windows_sorted = sorted(windows, key=lambda w: _instant_key(w.start_instant))
         for prev, nxt in zip(windows_sorted, windows_sorted[1:]):
-            if prev.end_instant >= nxt.start_instant:
+            if _instant_gte(prev.end_instant, nxt.start_instant):
                 if self.overlap_free:
                     raise ValueError(
                         f"BacktestWindowSplit: overlap detected between "
@@ -83,7 +135,7 @@ class BacktestWindowSplit:
         for split in (self.train, self.validation, self.test):
             if split is None:
                 continue
-            if split.start_instant <= instant <= split.end_instant:
+            if _instant_gte(instant, split.start_instant) and _instant_lte(instant, split.end_instant):
                 return split.dataset
         return None
 
