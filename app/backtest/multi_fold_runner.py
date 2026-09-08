@@ -60,12 +60,25 @@ class MultiFoldManifest:
 @dataclass(frozen=True)
 class MultiFoldAggregateSummary:
     fold_count: int
+    num_folds_attempted: int
     pass_count: int
     fail_count: int
     avg_total_return_pct: Decimal
     avg_max_drawdown_pct: Decimal
     avg_realized_pnl_quote: Decimal
     avg_fees_quote_total: Decimal
+    per_fold_metrics_sorted: tuple[dict[str, Any], ...] = ()
+    avg_sharpe_ratio_24h: float | None = None
+    avg_sortino_ratio_24h: float | None = None
+    avg_pfactor: float | None = None
+    compound_total_return_pct: float = 0.0
+    min_fold_total_return_pct: float = 0.0
+    max_fold_total_return_pct: float = 0.0
+    aggregate_info_codes: tuple[str, ...] = ()
+
+    @property
+    def apf(self) -> float | None:
+        return self.avg_pfactor
 
     def to_sorted_dict(self) -> dict[str, Any]:
         raw: dict[str, Any] = {}
@@ -73,9 +86,17 @@ class MultiFoldAggregateSummary:
             v = getattr(self, f.name)
             if isinstance(v, Decimal):
                 raw[f.name] = format(v, "f")
+            elif isinstance(v, tuple):
+                raw[f.name] = list(v)
             else:
                 raw[f.name] = v
+        if "avg_pfactor" in raw:
+            raw["avg_profit_factor"] = raw.pop("avg_pfactor")
         return dict(sorted(raw.items()))
+
+
+setattr(MultiFoldAggregateSummary, "avg_profit_factor", MultiFoldAggregateSummary.apf)
+setattr(MultiFoldAggregateSummary, "num_folds_ok", property(lambda self: self.pass_count))
 
 
 @dataclass(frozen=True)
@@ -170,6 +191,18 @@ def run_multifold_walkforward(
             )
             fold_result = runner.run(fold_bundle, run_id=fold_run_id, fold_backtest_window_split_override=fold_ws)
         except Exception as exc:  # noqa: BLE001 — fail-closed, no trade leak
+            # --- BLOK-1: deterministic start/end from fold_ws splits (contract required) ---
+            split_candidates = [s for s in (fold_ws.train, fold_ws.validation, fold_ws.test) if s is not None]
+            if split_candidates:
+                cands_start_sorted = sorted(split_candidates, key=lambda w: w.start_instant)
+                cands_end_sorted = sorted(split_candidates, key=lambda w: w.end_instant)
+                fail_start_instant = cands_start_sorted[0].start_instant
+                fail_end_instant = cands_end_sorted[-1].end_instant
+                fail_event_count = sum(getattr(s, "event_count", 0) for s in split_candidates)
+            else:
+                fail_start_instant = "1970-01-01T00:00:00.000Z"
+                fail_end_instant = "1970-01-01T00:00:00.000Z"
+                fail_event_count = 0
             meta_fail = BacktestRun(
                 run_id=fold_run_id,
                 bundle_id=getattr(bundle, "bundle_id", "unknown"),
@@ -181,18 +214,33 @@ def run_multifold_walkforward(
                 train_window=fold_ws.train,
                 validation_window=fold_ws.validation,
                 test_window=fold_ws.test,
+                start_instant=fail_start_instant,
+                end_instant=fail_end_instant,
+                event_count=fail_event_count,
+                walk_forward_mode="enabled_foundation",
+                timeframe=getattr(bundle, "timeframe", "1m") or "1m",
             )
             asum_fail = BacktestAssumptions()
             cnt_fail = BacktestRunCounts()
             perf_fail = BacktestPerformanceSummary()
+            # --- BLOK-2: deterministic fallback performance_v2 (contract required, fail closed) ---
+            from .runner import upgrade_backtest_performance_v1_to_v2
+            perf_fail_v2 = upgrade_backtest_performance_v1_to_v2(
+                perf_fail,
+                metrics_info_codes=("BK_MF_FOLD_FAIL_V2_FALLBACK",),
+            )
             fail_code = f"BK_MF_FOLD_FAIL_{fold.fold_id}"
             fold_result = BacktestRunResult(
                 metadata=meta_fail,
                 assumptions=asum_fail,
                 counts=cnt_fail,
                 performance=perf_fail,
+                performance_v2=perf_fail_v2,
                 window_split=fold_ws,
-                provenance={"failure_exception": f"{type(exc).__name__}: {exc}"},
+                provenance={
+                    "failure_exception_type": type(exc).__name__,
+                    "failure_exception_code": fail_code,
+                },
                 failure_reason_codes=(fail_code,),
                 engine_versions={"bkt_engine": "1.0.0"},
                 run_notes=(f"fold_exception_{fold.fold_id}",),
@@ -236,14 +284,70 @@ def run_multifold_walkforward(
         for r in per_fold_results
         if not r.failure_reason_codes
     ]
+    # --- S-BKT-03 per-fold V2 metrics + aggregate canonical ---
+    from .runner import BacktestPerformanceSummaryV2
+    from .metrics_compute import aggregate_metrics_fold_level, _q8, _r8
+    per_fold_dicts: list[dict[str, Any]] = []
+    for r in per_fold_results:
+        has_v2 = hasattr(r, "performance_v2") and isinstance(r.performance_v2, BacktestPerformanceSummaryV2)
+        if has_v2:
+            v2: Any = r.performance_v2
+            d: dict[str, Any] = {
+                "fold_run_id": r.metadata.run_id,
+                "total_return_pct": float(v2.total_return_pct or 0.0),
+                "net_return_pct": float(v2.net_return_pct or 0.0),
+                "max_drawdown_pct": float(v2.max_drawdown_pct or 0.0),
+                "total_trades": int(v2.total_trades or 0),
+                "win_rate_pct": v2.win_rate_pct,
+                "sharpe_ratio_24h": v2.sharpe_ratio_24h,
+                "sortino_ratio_24h": v2.sortino_ratio_24h,
+                "profit_factor": getattr(v2, "pfactor", None),
+                "total_fees_quote": format(v2.total_fees_quote, "f"),
+                "cost_overrides_sha256": str(v2.cost_overrides_sha256 or ""),
+                "metrics_info_codes": list(v2.metrics_info_codes or ()),
+                "failure_reason_codes": list(r.failure_reason_codes or ()),
+            }
+        else:
+            v1 = r.performance
+            d = {
+                "fold_run_id": r.metadata.run_id,
+                "total_return_pct": float(v1.total_return_pct or 0.0),
+                "net_return_pct": float(v1.total_return_pct or 0.0),
+                "max_drawdown_pct": float(v1.max_drawdown_pct or 0.0),
+                "total_trades": int(getattr(v1, "total_trades", 0) or 0),
+                "win_rate_pct": getattr(v1, "win_rate_pct", None),
+                "sharpe_ratio_24h": getattr(v1, "sharpe_ratio_24h", None),
+                "sortino_ratio_24h": None,
+                "profit_factor": None,
+                "total_fees_quote": format(v1.total_fees_quote, "f"),
+                "cost_overrides_sha256": "",
+                "metrics_info_codes": ["UPGRADED_FROM_V1_MFOLD"],
+                "failure_reason_codes": list(r.failure_reason_codes or ()),
+            }
+        per_fold_dicts.append(d)
+    per_fold_dicts.sort(key=lambda x: str(x.get("fold_run_id", "")))
+    passed_only = [d for d, r in zip(per_fold_dicts, per_fold_results) if not r.failure_reason_codes]
+    agg = aggregate_metrics_fold_level(passed_only, exclude_none_in_avg=True)
+    n_folds_def = len(folds)
     summary = MultiFoldAggregateSummary(
-        fold_count=len(folds),
-        pass_count=len(folds) - len(failed_fold_ids),
+        fold_count=n_folds_def,
+        num_folds_attempted=n_folds_def,
+        pass_count=n_folds_def - len(failed_fold_ids),
         fail_count=len(failed_fold_ids),
         avg_total_return_pct=_avg_or_zero(returns),
         avg_max_drawdown_pct=_avg_or_zero(max_dds),
         avg_realized_pnl_quote=_avg_or_zero(rp),
         avg_fees_quote_total=_avg_or_zero(fees),
+        per_fold_metrics_sorted=tuple(
+            {k: (format(v, "f") if isinstance(v, Decimal) else v) for k, v in d.items()} for d in per_fold_dicts
+        ),
+        avg_sharpe_ratio_24h=agg.get("avg_sharpe_ratio_24h"),
+        avg_sortino_ratio_24h=agg.get("avg_sortino_ratio_24h"),
+        avg_pfactor=agg.get("avg_profit_factor"),
+        compound_total_return_pct=float(agg.get("compound_total_return_pct", 0.0) or 0.0),
+        min_fold_total_return_pct=float(agg.get("min_fold_total_return_pct", 0.0) or 0.0),
+        max_fold_total_return_pct=float(agg.get("max_fold_total_return_pct", 0.0) or 0.0),
+        aggregate_info_codes=tuple(agg.get("info_codes", ())),
     )
     return MultiFoldBacktestResult(
         run_id=base_run_id,

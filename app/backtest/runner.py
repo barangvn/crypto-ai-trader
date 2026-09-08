@@ -92,6 +92,12 @@ class BacktestRunCounts:
     failures: int = 0
     quality_blocked: int = 0
     skipped: int = 0
+    num_candles: int = 0
+    num_decisions: int = 0
+    num_order_requests: int = 0
+    num_order_fills: int = 0
+    num_quality_events: int = 0
+    num_risk_events: int = 0
 
     @property
     def market_count(self) -> int:
@@ -200,11 +206,128 @@ class BacktestPerformanceSummary:
 
 
 @dataclass(slots=True, frozen=True)
+class BacktestPerformanceSummaryV2:
+    """S-BKT-03 V2: FR-059/FR-038 performance metrics populated.
+
+    V1 (BacktestPerformanceSummary L148) frozen=True oldugu icin
+    backward-compat olarak V2 runner SONUNA yazilir (OD-07 cozuldu).
+    Eski artifact JSON -> convert via upgrade_backtest_performance_v1_to_v2.
+    """
+
+    total_return_pct: float = 0.0
+    net_return_pct: float = 0.0
+    realized_pnl_quote: Decimal = Decimal("0")
+    unrealized_pnl_quote: Decimal = Decimal("0")
+    total_fees_quote: Decimal = Decimal("0")
+    total_slippage_quote: Decimal = Decimal("0")
+    total_latency_ms: float = 0.0
+    gross_exposure_quote: Decimal = Decimal("0")
+    net_exposure_quote: Decimal = Decimal("0")
+    max_drawdown_pct: float = 0.0
+    sharpe_ratio_24h: float | None = None
+    sortino_ratio_24h: float | None = None
+    pfactor: float | None = None
+    expectancy_quote: Decimal | None = None
+    stability_index: int | None = None
+    rolling_24h_return_pct: float | None = None
+    win_rate_pct: float | None = None
+    avg_win_quote: Decimal | None = None
+    avg_loss_quote: Decimal | None = None
+    total_trades: int = 0
+    winning_trades: int = 0
+    losing_trades: int = 0
+    fill_count: int = 0
+    order_count: int = 0
+    partial_fill_count: int = 0
+    avg_fill_qty_base: Decimal = Decimal("0")
+    avg_notional_per_trade: Decimal = Decimal("0")
+    final_equity_quote: Decimal = Decimal("0")
+    initial_equity_quote: Decimal = Decimal("0")
+    strategy_regime_rows_sorted: tuple[dict[str, Any], ...] = ()
+    metrics_info_codes: tuple[str, ...] = ()
+    cost_overrides_sha256: str = ""
+    artifact_schema_version: str = "bkt_perf_v2"
+
+    @property
+    def total_return(self) -> float:
+        return self.total_return_pct
+
+    @property
+    def realized_pnl(self) -> Decimal:
+        return self.realized_pnl_quote
+
+    @property
+    def unrealized_pnl(self) -> Decimal:
+        return self.unrealized_pnl_quote
+
+    @property
+    def fees(self) -> Decimal:
+        return self.total_fees_quote
+
+    @property
+    def exposure(self) -> Decimal:
+        return self.gross_exposure_quote
+
+    @property
+    def max_drawdown(self) -> float:
+        return self.max_drawdown_pct
+
+    @property
+    def rolling_24h(self) -> float | None:
+        return self.rolling_24h_return_pct
+
+    @property
+    def pf(self) -> float | None:
+        return self.pfactor
+
+    def to_sorted_dict(self) -> dict[str, Any]:
+        raw = _dc_to_sorted_dict(self)
+        if "pfactor" in raw:
+            raw["profit_factor"] = raw.pop("pfactor")
+        return dict(sorted(raw.items()))
+
+
+setattr(BacktestPerformanceSummaryV2, "profit_factor", BacktestPerformanceSummaryV2.pf)
+
+
+def upgrade_backtest_performance_v1_to_v2(
+    v1: BacktestPerformanceSummary,
+    *,
+    metrics_info_codes: tuple[str, ...] = ("UPGRADED_FROM_V1",),
+) -> BacktestPerformanceSummaryV2:
+    return BacktestPerformanceSummaryV2(
+        total_return_pct=v1.total_return_pct,
+        net_return_pct=v1.total_return_pct,
+        realized_pnl_quote=v1.realized_pnl_quote,
+        unrealized_pnl_quote=v1.unrealized_pnl_quote,
+        total_fees_quote=v1.total_fees_quote,
+        gross_exposure_quote=v1.gross_exposure_quote,
+        net_exposure_quote=v1.net_exposure_quote,
+        max_drawdown_pct=v1.max_drawdown_pct,
+        sharpe_ratio_24h=v1.sharpe_ratio_24h,
+        rolling_24h_return_pct=v1.rolling_24h_return_pct,
+        pfactor=getattr(v1, "profit_factor", None),
+        win_rate_pct=v1.win_rate_pct,
+        total_trades=v1.total_trades,
+        winning_trades=v1.winning_trades,
+        losing_trades=v1.losing_trades,
+        fill_count=v1.fill_count,
+        order_count=v1.order_count,
+        avg_fill_qty_base=v1.avg_fill_qty_base,
+        avg_notional_per_trade=v1.avg_notional_per_trade,
+        final_equity_quote=v1.final_equity_quote,
+        initial_equity_quote=v1.initial_equity_quote,
+        metrics_info_codes=metrics_info_codes,
+    )
+
+
+@dataclass(slots=True, frozen=True)
 class BacktestRunResult:
     metadata: BacktestRun
     assumptions: BacktestAssumptions
     counts: BacktestRunCounts
     performance: BacktestPerformanceSummary
+    performance_v2: BacktestPerformanceSummaryV2
     window_split: BacktestWindowSplit | None
     provenance: dict[str, Any]
     failure_reason_codes: tuple[str, ...]
@@ -220,6 +343,7 @@ class BacktestRunResult:
             "assumptions": self.assumptions.to_sorted_dict(),
             "counts": self.counts.to_sorted_dict(),
             "performance": self.performance.to_sorted_dict(),
+            "performance_v2": self.performance_v2.to_sorted_dict(),
             "window_split": self.window_split.to_sorted_dict() if self.window_split else None,
             "provenance": _dc_to_sorted_dict(self.provenance),
             "failure_reason_codes": list(self.failure_reason_codes),
@@ -518,9 +642,16 @@ class BacktestRunner:
             failures=len(ctx.failures),
             quality_blocked=quality_blocked,
             skipped=skipped_total,
+            num_candles=market_count,
+            num_decisions=strategy_count,
+            num_order_requests=porder_created,
+            num_order_fills=fills,
+            num_quality_events=quality_blocked,
+            num_risk_events=risk_total,
         )
 
         performance = self._compute_performance_summary(ctx)
+        performance_v2 = self._compute_performance_summary_v2(ctx, performance)
         assumptions_hash = self.assumptions.compute_hash()
         provenance_sha = hashlib.sha256(
             "|".join([
@@ -618,6 +749,7 @@ class BacktestRunner:
             assumptions=self.assumptions,
             counts=counts,
             performance=performance,
+            performance_v2=performance_v2,
             window_split=window_split,
             provenance=provenance,
             failure_reason_codes=tuple(sorted(set(all_failures))),
@@ -716,6 +848,134 @@ class BacktestRunner:
             avg_notional_per_trade=sum_notional / Decimal(max(1, total_fills)),
         )
         return perf
+
+    def _compute_performance_summary_v2(
+        self,
+        ctx: Any,
+        v1: BacktestPerformanceSummary,
+    ) -> BacktestPerformanceSummaryV2:
+        from .metrics_compute import (
+            _r8,
+            _q8,
+            closed_trade_pnl_sequence,
+            summarize_win_loss,
+            compute_sharpe_sortino_from_returns,
+            returns_pct_from_snapshots,
+            group_by_strategy_regime,
+            cost_impact_between_runs,
+        )
+        info_codes: list[str] = []
+        # --- Closed trades / WL metrics (REUSE metrics_compute closed seq) ---
+        closed_pnls = closed_trade_pnl_sequence(ctx.fills)
+        wl = summarize_win_loss(closed_pnls)
+        info_codes.extend(list(wl["info_codes"]))
+        # --- Sharpe / Sortino (OD-03 min N=30, OD-02 fallback snapshot list) ---
+        try:
+            from app.simulation.portfolio import Rolling24Result
+            has_r24 = any(isinstance(getattr(ctx, "rolling_results", None) or [], Rolling24Result) for _ in [1]) or False
+        except BaseException:
+            has_r24 = False
+        returns_list: list[float] = []
+        if has_r24 and False:
+            pass  # S-PTF-03 available branch (OD-02 select)
+        else:
+            returns_list = returns_pct_from_snapshots(ctx.snapshots, max_minutes=5)
+        ss = compute_sharpe_sortino_from_returns(returns_list, min_samples=30)
+        info_codes.extend(list(ss["info_codes"]))
+        # --- Cost override sha (S-BKT-02 cost manifest reuse) ---
+        try:
+            from .cost_injection import cost_overrides_manifest
+            import hashlib, json
+            base_fill = FillAssumptionsConfig()
+            m = cost_overrides_manifest(base_fill, self.cost_overrides, self.cost_overrides_fold)
+            cost_sha = hashlib.sha256(
+                json.dumps(m, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+            ).hexdigest()
+        except BaseException:
+            cost_sha = ""
+        # --- Decomposition: Strategy x Regime (OD-05 corr chain unknown group ok) ---
+        # correlation_id -> strategy_id/regime lookup via ctx.stage_timestamps wrappers
+        # since hard-red Position contract NO change: EMPTY wrapper -> UNKNOWN_*
+        try:
+            rows = group_by_strategy_regime(ctx.fills, strategy_by_correlation=None, regime_by_correlation=None)
+            rows_dicts: tuple[dict[str, Any], ...] = tuple(
+                {
+                    "strategy_id": r.strategy_id,
+                    "regime": r.regime,
+                    "trade_count": r.trade_count,
+                    "win_rate_pct": r.win_rate_pct,
+                    "avg_pnl_quote": format(r.avg_pnl_quote, "f") if r.avg_pnl_quote is not None else None,
+                    "info_codes": list(r.info_codes),
+                }
+                for r in rows
+            )
+        except BaseException:
+            rows_dicts = ()
+        # --- Slippage / latency / partial fills (S-BKT-02 injection reuse) ---
+        slip_tot = Decimal("0")
+        lat_ms = 0.0
+        partial_count = 0
+        for f in ctx.fills:
+            try:
+                s = getattr(f, "slippage_quote", Decimal("0"))
+                if isinstance(s, (int, float, str, Decimal)):
+                    slip_tot += Decimal(s)
+            except BaseException:
+                pass
+            try:
+                lat = getattr(f, "latency_ms", 0)
+                if isinstance(lat, (int, float)):
+                    lat_ms += float(lat)
+            except BaseException:
+                pass
+            try:
+                po = getattr(f, "partial_fill_indicator", None)
+                if po is not None and bool(po):
+                    partial_count += 1
+            except BaseException:
+                pass
+        # --- Rolling 24h V2 propagate (OD-08 None + info code if missing) ---
+        roll_24 = v1.rolling_24h_return_pct
+        if roll_24 is None and "ROLLING_NOT_AVAILABLE" not in info_codes:
+            # OD-08: Eğer ctx snapshot bazlı fallback da çalışmadıysa info code
+            # fallback hesap v1'de None ise zaten V2'de None + info code
+            if not ctx.snapshots:
+                info_codes.append("ROLLING_NOT_AVAILABLE")
+        # Assemble V2 (v1 fieldlari aynen koru + ek alanlar doldur)
+        return BacktestPerformanceSummaryV2(
+            total_return_pct=v1.total_return_pct,
+            net_return_pct=v1.total_return_pct,
+            realized_pnl_quote=v1.realized_pnl_quote,
+            unrealized_pnl_quote=v1.unrealized_pnl_quote,
+            total_fees_quote=v1.total_fees_quote,
+            total_slippage_quote=_q8(slip_tot),
+            total_latency_ms=_r8(lat_ms),
+            gross_exposure_quote=v1.gross_exposure_quote,
+            net_exposure_quote=v1.net_exposure_quote,
+            max_drawdown_pct=v1.max_drawdown_pct,
+            sharpe_ratio_24h=ss["sharpe_ratio_24h"],
+            sortino_ratio_24h=ss["sortino_ratio_24h"],
+            pfactor=wl["profit_factor"],
+            expectancy_quote=wl["expectancy_quote"],
+            stability_index=wl["stability_index"],
+            rolling_24h_return_pct=roll_24,
+            win_rate_pct=wl["win_rate_pct"],
+            avg_win_quote=wl["avg_win_quote"],
+            avg_loss_quote=wl["avg_loss_quote"],
+            total_trades=wl["total_trades"],
+            winning_trades=wl["winning_trades"],
+            losing_trades=wl["losing_trades"],
+            fill_count=v1.fill_count,
+            order_count=v1.order_count,
+            partial_fill_count=partial_count,
+            avg_fill_qty_base=v1.avg_fill_qty_base,
+            avg_notional_per_trade=v1.avg_notional_per_trade,
+            final_equity_quote=v1.final_equity_quote,
+            initial_equity_quote=v1.initial_equity_quote,
+            strategy_regime_rows_sorted=rows_dicts,
+            metrics_info_codes=tuple(info_codes),
+            cost_overrides_sha256=cost_sha,
+        )
 
 
 def run_deterministic_check_n_times(
