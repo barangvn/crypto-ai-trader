@@ -1,0 +1,93 @@
+"""CompareValidationError + 27 ERR_* reason codes.
+
+Fail-closed. Any invalid payload → raise. NONE silent success / None return.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+
+ERR_MODEL_NOT_FOUND = "MODEL_NOT_FOUND"
+ERR_VERSION_MISMATCH = "VERSION_MISMATCH"
+ERR_NOT_CHAMPION_STATUS = "NOT_CHAMPION_STATUS"
+ERR_NOT_CHALLENGER_STATUS = "NOT_CHALLENGER_STATUS"
+ERR_SAME_MODEL_SAME_VERSION = "SAME_MODEL_SAME_VERSION"
+ERR_EMPTY_CHAMPION_MODEL = "EMPTY_CHAMPION_MODEL"
+ERR_EMPTY_CHALLENGER_MODEL = "EMPTY_CHALLENGER_MODEL"
+ERR_ARTIFACT_NOT_FOUND = "ARTIFACT_NOT_FOUND"
+ERR_EMPTY_ARTIFACT_URI = "EMPTY_ARTIFACT_URI"
+ERR_ARTIFACT_CORRUPT = "ARTIFACT_CORRUPT"
+ERR_INTEGRITY_SHA_MISMATCH = "INTEGRITY_SHA_MISMATCH"
+ERR_MISSING_METRIC = "MISSING_METRIC"
+ERR_UNKNOWN_METRIC_KEY = "UNKNOWN_METRIC_KEY"
+ERR_METRIC_TYPE_MISMATCH = "METRIC_TYPE_MISMATCH"
+ERR_NAN_NUMERIC = "NAN_NUMERIC"
+ERR_NEGATIVE_TRADE_COUNT = "NEGATIVE_TRADE_COUNT"
+ERR_DRAWDOWN_OUT_OF_RANGE = "DRAWDOWN_OUT_OF_RANGE"
+ERR_INVALID_ROUNDING_PRECISION = "INVALID_ROUNDING_PRECISION"
+ERR_INCOMPARABLE_WINDOW = "INCOMPARABLE_WINDOW"
+ERR_INCOMPARABLE_DATASET = "INCOMPARABLE_DATASET"
+ERR_INCOMPARABLE_COST = "INCOMPARABLE_COST"
+ERR_INCOMPARABLE_UNIVERSE = "INCOMPARABLE_UNIVERSE"
+ERR_INCOMPARABLE_COMPATIBILITY = "INCOMPATIBLE_COMPATIBILITY"
+ERR_INCOMPARABLE_THRESHOLDS = "INCOMPARABLE_THRESHOLDS"
+ERR_INCOMPARABLE_FOLD_COUNT = "INCOMPARABLE_FOLD_COUNT"
+ERR_INCOMPARABLE_REGIME_GROUPS = "INCOMPARABLE_REGIME_GROUPS"
+ERR_INCOMPATIBLE_STATUS_TRANSITION = "INCOMPATIBLE_STATUS_TRANSITION"
+
+
+REASON_CODES: tuple[str, ...] = (
+    ERR_MODEL_NOT_FOUND,
+    ERR_VERSION_MISMATCH,
+    ERR_NOT_CHAMPION_STATUS,
+    ERR_NOT_CHALLENGER_STATUS,
+    ERR_SAME_MODEL_SAME_VERSION,
+    ERR_EMPTY_CHAMPION_MODEL,
+    ERR_EMPTY_CHALLENGER_MODEL,
+    ERR_ARTIFACT_NOT_FOUND,
+    ERR_EMPTY_ARTIFACT_URI,
+    ERR_ARTIFACT_CORRUPT,
+    ERR_INTEGRITY_SHA_MISMATCH,
+    ERR_MISSING_METRIC,
+    ERR_UNKNOWN_METRIC_KEY,
+    ERR_METRIC_TYPE_MISMATCH,
+    ERR_NAN_NUMERIC,
+    ERR_NEGATIVE_TRADE_COUNT,
+    ERR_DRAWDOWN_OUT_OF_RANGE,
+    ERR_INVALID_ROUNDING_PRECISION,
+    ERR_INCOMPARABLE_WINDOW,
+    ERR_INCOMPARABLE_DATASET,
+    ERR_INCOMPARABLE_COST,
+    ERR_INCOMPARABLE_UNIVERSE,
+    ERR_INCOMPARABLE_COMPATIBILITY,
+    ERR_INCOMPARABLE_THRESHOLDS,
+    ERR_INCOMPARABLE_FOLD_COUNT,
+    ERR_INCOMPARABLE_REGIME_GROUPS,
+    ERR_INCOMPATIBLE_STATUS_TRANSITION,
+)
+
+
+@dataclass
+class CompareValidationError(Exception):
+    """Deterministic fail-closed exception.
+
+    caller: compare engine / comparability guards.
+    NEVER silent; invalid always raises.
+    """
+
+    reason_code: str
+    message: str
+    details: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.reason_code, str) or self.reason_code not in REASON_CODES:
+            raise ValueError(f"CompareValidationError invalid reason_code: {self.reason_code!r} allowed={REASON_CODES}")
+        if not isinstance(self.message, str) or not self.message:
+            raise ValueError("CompareValidationError.message required non-empty")
+        if not isinstance(self.details, dict):
+            raise ValueError("CompareValidationError.details must be dict[str, Any]")
+
+    def __str__(self) -> str:  # pragma: no cover - trivial
+        return f"[{self.reason_code}] {self.message} {self.details}"
