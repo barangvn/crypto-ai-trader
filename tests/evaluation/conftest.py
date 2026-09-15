@@ -82,6 +82,7 @@ def _base_metrics_template(
     window_days: int | None = DEFAULT_WINDOW_DAYS,
     oos_flag: bool | None = True,
     stability: float | None = None,
+    fees_per_trade: float | None = None,
 ) -> dict[str, Any]:
     m: dict[str, Any] = {
         "return_pct": Decimal("0.12000000") if return_pct is None else return_pct,
@@ -98,6 +99,8 @@ def _base_metrics_template(
     }
     if stability is not None:
         m["stability"] = float(stability)
+    if fees_per_trade is not None:
+        m["fees_per_trade"] = float(fees_per_trade)
     # Round values deterministically
     for k in list(m.keys()):
         m[k] = round_metric_value(m[k], k)
