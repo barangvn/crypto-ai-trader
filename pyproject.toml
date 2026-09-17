@@ -10,7 +10,7 @@ dev = ["pytest>=9.1.1"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-python_files = ["test_*.py", "rollback_*.py"]
+python_files = ["test_*.py", "rollback_*.py", "cap5_*.py"]
 addopts = "-ra --strict-markers"
 markers = [
     "contract: Contract compliance tests",
