@@ -32,3 +32,9 @@ Thumbs.db
 
 # Temporary local pytest workaround
 _pytest_local/
+
+# Generated CAP-5 proof/audit artifacts (regenerated on each test run)
+.proof-artifacts/
+
+# Agent/memory working logs (exclude from all sub-folders; user-mandatory exclusion)
+**/.memlog.md

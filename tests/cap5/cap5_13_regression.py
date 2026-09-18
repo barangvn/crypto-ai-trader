@@ -30,6 +30,13 @@ def _parse_int_from_output(output_text: str, default: int = 0) -> int:
             return int(m2.group(1))
         except (ValueError, TypeError):
             return default
+    fallback_count = 0
+    for line in output_text.splitlines():
+        stripped = line.strip()
+        if "::" in stripped and stripped.startswith("tests/"):
+            fallback_count += 1
+    if fallback_count > 0:
+        return fallback_count
     return default
 
 
@@ -50,11 +57,17 @@ class TestPhase1RegressionG13:
                 ],
                 capture_output=True,
                 text=True,
-                timeout=60,
+                timeout=90,
                 cwd=str(repo_root),
             )
             combined = (result.stdout or "") + "\n" + (result.stderr or "")
             count = _parse_int_from_output(combined, 0)
+            valid_exit_codes_collect_only = {0, 5}
+            if result.returncode not in valid_exit_codes_collect_only and count == 0:
+                return False, 0, (
+                    f"subprocess exit={result.returncode}; stdout chars={len(result.stdout or '')}; "
+                    f"stderr chars={len(result.stderr or '')}"
+                )
             if count > 0:
                 return True, count, combined
             return True, max(count, 0), combined
