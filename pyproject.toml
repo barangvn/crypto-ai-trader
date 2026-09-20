@@ -6,6 +6,11 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=9.1.1"]
+eapi = [
+    "fastapi==0.141.1",
+    "uvicorn>=0.34",
+    "prometheus-client>=0.22",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

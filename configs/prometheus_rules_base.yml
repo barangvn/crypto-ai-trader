@@ -1,0 +1,118 @@
+groups:
+  - name: eapi_health
+    rules:
+      - alert: HealthUnhealthy
+        expr: eapi_health_status{status="unhealthy"} == 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "E-API health status is unhealthy
+          description: "Component {{ $labels.module }} reports unhealthy for more than 0 minutes.
+
+      - alert: HealthDegraded
+        expr: eapi_health_status{status="degraded"} == 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "E-API health status is degraded"
+          description: "Component {{ $labels.module }} reports degraded for more than 2 minutes."
+
+  - name: eapi_stale_data
+    rules:
+      - alert: StaleDataDetected
+        expr: increase(eapi_stale_data_total[1m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Stale data detected within last 1 minute
+          description: "Module {{ $labels.module }} reported stale data."
+
+      - alert: HighStaleDataRate
+        expr: rate(eapi_stale_data_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High stale data rate"
+          description: "Stale data rate above 0.1/s over 5m."
+
+  - name: eapi_risk
+    rules:
+      - alert: KillSwitchTriggered
+        expr: eapi_kill_switch_activated_total > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kill switch triggered"
+          description: "Kill switch activated count {{ $value }} times. Scope={{ $labels.scope }}."
+
+      - alert: RiskRejectionRateSpike
+        expr: rate(eapi_risk_decisions_total{result="rejected"}[5m]) / rate(eapi_risk_decisions_total[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Risk rejection rate spike (>50%)"
+          description: "Risk rejection rate above 50% over 5m window."
+
+      - alert: EmergencyStopActivated
+        expr: eapi_emergency_stop_active == 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Emergency stop is active"
+          description: "System emergency stop flag is set."
+
+  - name: eapi_observability
+    rules:
+      - alert: CorrelationIdMissing
+        expr: increase(eapi_correlation_id_missing_total[1m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Correlation ID missing in audit"
+          description: "Correlation ID missing in {{ $value }} events in last minute."
+
+      - alert: QualityFlagDegraded
+        expr: increase(eapi_quality_flags_total{flag="degraded"}[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Quality degraded flags high count"
+          description: "Degraded quality flag raised 10+ over 5m."
+
+      - alert: OpportunityQualityFlagHigh
+        expr: increase(eapi_quality_flags_total[1m]) > 50
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Quality flags high volume"
+          description: "50+ quality flags within a minute."
+
+  - name: eapi_audit
+    rules:
+      - alert: FailedAuthorizationAttempts
+        expr: rate(eapi_audit_events_total{result="failed_attempt"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Failed authorization attempts"
+          description: "Failed auth rate exceeds 0.05/s over 5m."
+
+      - alert: IdempotencyDuplicatesHigh
+        expr: rate(eapi_audit_events_total{result="idempotency_duplicate"}[15m]) > 0.2
+        for: 15m
+        labels:
+          severity: info
+        annotations:
+          summary: "Idempotency duplicates observed
+          description: "Duplicate idempotency replays above threshold.
