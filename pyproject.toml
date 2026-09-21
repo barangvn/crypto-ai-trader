@@ -21,4 +21,8 @@ markers = [
     "contract: Contract compliance tests",
     "failure_injection: Network/credential safety tests",
     "replay: Replay determinism tests",
+    "F1: no-network — any socket/http/grpc/aiohttp network call is FAIL_CLOSED inside marked tests",
+    "F2: no-credentials — any API key / secret / token read from env/files is FAIL_CLOSED inside marked tests",
+    "F3: no-live-env — tests marked F3 run ONLY on env=DEV or env=TEST; STG/PROD auto-skip with explicit S-FND-01 reason",
+    "F4: stdlib-only — sys.modules contains NO 3rd-party (fastapi/uvicorn/prometheus_client/sklearn/pyyaml/vault/psycopg) inside marked tests; otherwise FAIL_CLOSED",
 ]
