@@ -1,0 +1,38 @@
+# Open Decisions — S-FND-06 (8 OD-06-01..08)
+
+Açık kararlar: İsteğe bağlı (Optional). Hiçbiri MANDATORY BLOCKER değil. Hepsi default çözüm + opsiyonel override.
+
+| OD ID | Konu | Default Çözüm (DEFAULT) | Alternatif (Opsiyonel Override) | Etki Alanı | Implementation Öncesi Çözülmesi Gerekli mi? |
+|---|---|---|---|---|---|
+| **OD-06-01** | Serialization 3rd party library kullanımı mı, stdlib-only mi? | **DEFAULT: STDLIB JSON + hashlib.sha256** (0 new 3rd party dep; hard-red HR-07 default PASS). | OPSİYONEL: `orjson` (Rust backend, daha hızlı) veya `msgspec` + `xxhash` (hızlı fingerprint). Bu seçilirse: 1) pyproject.toml'a yeni runtime dep ekle, 2) EX listesinde 1 exception kaydet (pyproject modify), 3) hard-red HR-07 bu tek import için EXCEPTION aç, 4) OD-06-01 değeri "3p" olarak güncelle. **Default halen hazır.** | Runtime perf, 3rd party count. | HAYIR (opsiyonel. Default stdlib ok → implemente edilebilir.) |
+| **OD-06-02** | Decimal string representation normalleştirilecek mi? Örn `Decimal("1.200")` → serialize ederken `"1.200"` preserve mi yoksa `"1.2"` olarak normalize mi? | **DEFAULT: PRESERVE ORIGINAL STRING.** `str(Decimal(x))` doğrudan kullan. Equal Decimal nesneleri farklı string → farklı JSON. (Determinism: aynı Decimal input → aynı output. İki farklı Decimal nesnesi value eşit ama str farklı ise output farklı olabilir.) Bu davranış downstream feature hesaplamalarında `Decimal.quantize` zaten halleder. | OPSİYONEL: `format(dec, "f")` + no trailing zero trim (aynı precision sabitlemek) → `Decimal(str(round(dec, 18)))`. Ama bu çok ihtiyaç değil. | Numeric determinism, fingerprint identity. | HAYIR. Default preserve = safe, data-loss YOK. |
+| **OD-06-03** | PyYAML/YAML desteği bu hikâyede açılacak mı? | **DEFAULT: CLOSED PERMANENTLY.** Sadece JSON. No YAML anywhere. Hard-red HR-06 enforce. | N/A. Açmak için ayrı bir S-FND story + güvenlik denetimi şart. S-FND-04 evidence chain'de YAML kapalıydı. Burada ayrıca bu hikâye kendisi kapatıyor (silent inherit değil). | Serialization scope, dep drift. | HAYIR. Default closed = hazır. |
+| **OD-06-04** | ULID concrete generator ID üretimi bu hikâyeye dahil mi? | **DEFAULT: HAYIR (ÜRETME YOK).** Sadece validate + compare. ULID ID üretimi S-RDH-01 (ingest giriş modülü) veya S-PLN-01 (bus dispatch) tarafından yapılır. Fixture-only `_sample_ulid()` test helper üretilebilir ama production code path YOK. | OPSİYONEL: Production ULID generator eklenebilir ama zaman kaynağı (monotonic) tartışılır. Downstream hikâyeye bırakmak daha güvenli (HR-11 no now source in helper prod). | ID üretim. | HAYIR. Default defer = ok. |
+| **OD-06-05** | `extra` alanı (envelope L48) serialize ederken **key sort deep** mi uygulanacak? Yani nested dict inside `extra` → her seviyede sort_keys. | **DEFAULT: DEEP RECURSIVE sort.** `canonical_json()` iç içe geçmiş tüm dictler için sort_keys + custom walker. Explicit guarantee. | OPSİYONEL: only top-level sort (ama nested fingerprint kararsız olur → DEEP seçiyoruz defaultta). | Fingerprint identity. | HAYIR. Default deep sort = ok. |
+| **OD-06-06** | `envelope_fingerprint()` neyi hash ediyor? Tüm envelope (16 alan + payload) — payload dahil mi? | **DEFAULT: TÜM ENVELOPE payload dahil.** Hash over full canonical JSON. Payload hash'i değişirse fingerprint değişir. Bu downstream bus dedup için doğrudur. | OPSİYONEL: `envelope_meta_fingerprint()` (meta only, payload excluded) diye ayrı yardımcı ekleyebiliriz — ama optional ekstra, şart değil. | Dedup semantics. | HAYIR. Default payload dahil = ok. Ana yardımcı yeterli; ayrıca ihtiyaca göre sonradan eklenebilir. |
+| **OD-06-07** | `build_valid_envelope()` default fixture ULID üretirken, üretim yolunda (non-fixture) builder çağrılırsa ne olur? ULID üretmek yerine event_id override OLMADAN builder çağrılması tehlikeli mi? **STATUS: RESOLVED / SUPERSEDED (D-06-B).** | **SUPERSEDED — canonical = SPEC §6.1 + AC-14:** `build_valid_envelope(..., event_id: str \| None = None)`; override verilmezse builder deterministik **fixture ULID üretir, RAISE ETMEZ**. Bu OD'nin "override yoksa RAISE" önerisi load-bearing SPEC §6.1 gövdesi + executable AC-14 tarafından geçersiz kılınmıştır. (Aşağıdaki D-06-B rectification note'a bak.) | N/A (rectified; aşağıdaki D-06-B note). | Fail-closed builder semantics. | HAYIR (RESOLVED). Canonical: missing `event_id` → fixture ULID, no raise. |
+| **OD-06-08** | Regex constants tek kaynak: S-FND-05 `app/contracts/_validation.py` internal modülünden import edilecek mi, yoksa bu hikâyede kopya mı tutulacak? | **DEFAULT: ÖNCELİKLE PUBLIC IMPORT.** Sıra: 1) `from app.contracts.sfnd05_api import INSTANT_RGX, SYMBOL_RGX, ULID_*` — eğer bu regexler public API'de export ediliyorsa → import et; 2) EĞER export edilmemişse → `_sfnd06_constants.py` içinde aynı regex string değerlerini tek kaynak olarak kopyala. **ASLA modifiye etme (K0) S-FND-05 dosyalarını.** | OPSİYONEL: Implementation phase'de regex export'ı S-FND-05 API'ye eklemek istersek — bu, S-FND-05 completed davranışını değiştirmediği için (sadece export genişletmesi) **EX listesinde 1 istisna (app/contracts/sfnd05_api.py add export)** gerekir. Ama defaultta gerek yok; kopya tutmak risk-free. | Shared regex tek kaynak. | HAYIR. Default iki-sekanslı strateji = ok. Implementation detayı. |
+
+---
+
+### Mandatory Open Decisions (REQUIRED Resolution): **0**
+Tüm 8 OD default çözüme sahiptir. Implementation, OD'leri açıkça değiştirmeden DEFAULT'ları uygular → READY.
+
+---
+
+### D-06-B Rectification Note — OD-06-07 SUPERSEDED (event_id missing → fixture ULID, no raise)
+
+**Konu:** OD-06-07'nin pre-implementation tercihi ("`event_id` override yoksa builder RAISE eder; yalnız fixture-only context kendi ULID'ini üretir") ile final canonical contract (SPEC §6.1 + AC-14: override yoksa builder deterministik fixture ULID üretir, raise yok) çelişiyordu. Bu çelişki audit sırasında MINOR olarak işaretlenmişti; bu not onu kapatır.
+
+**Source precedence (exact evidence):**
+1. `open-decisions.md` (bu dosya, header satır 3): "İsteğe bağlı (Optional). Hiçbiri MANDATORY BLOCKER değil." → OD-06-07 bağlayıcı/normatif DEĞİL.
+2. `open-decisions.md` footer: "Mandatory Open Decisions (REQUIRED Resolution): **0**".
+3. `implementation-readiness.md` satır 17 (bölüm I): "Open Decisions 8 OD. → MANDATORY resolution required = **0**"; MINOR kayıtları yalnız OD-06-01 ve OD-06-04'tür — OD-06-07 mandatory değil.
+4. `SPEC.md` satır 141: §6.1 başlığı "Exact name + exact parameters — **load-bearing**"; satır 199 `event_id: str | None = None`; satır 215 docstring "Missing → fixture ULID/instant generated".
+5. `acceptance-criteria.md` AC-14 (executable): partial kwargs → default fixtures, "envelope post-init S-FND-05 invariants raise YOK".
+6. Executable test: `tests/foundation_sfnd06/test_sfnd06_build_valid_envelope.py::test_ac14_partial_override_fills_deterministic_defaults` (event_id non-null, no raise).
+7. Implementation: `app/contracts/_sfnd06_builders.py::build_valid_envelope` (defaults via `DEFAULT_EVENT_ID`, no raise on missing override).
+
+**Karar:** OD-06-07 **RESOLVED / SUPERSEDED**. Final load-bearing SPEC §6.1 + AC-14 (executable) daha yeni ve bağlayıcı canonical contract'tır; OD-06-07 opsiyonel statüsü ve implementation/executable-test kanıtı nedeniyle geçersiz kılınmıştır. Implementation dokümana değil, doküman canonical davranışa uygun; bu nedenle dokümantasyon hizalanır (kod/test değişmez).
+
+**Canonical davranış (tek, açık):** `build_valid_envelope()` `event_id` verilmezse deterministik **fixture ULID üretir — RAISE ETMEZ**. Bu davranış SPEC §6.1, AC-14 ve executable test ile doğrulanmıştır; ilgili companion referansları (SPEC §6.1, acceptance-criteria AC-14, test-plan TP-06) bu tek davranışla tutarlıdır. Kod ve test bu turda DEĞİŞTİRİLMEMİŞTİR.
