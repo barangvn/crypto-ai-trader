@@ -1,0 +1,18 @@
+# Source Gaps — S-FND-06 (8 GAP-06-01..08)
+
+Source (PRD, EPICS, CONTRACTS, ARCHITECTURE-SPINE) dokümanlarında **açıkça yazılmayan** ama implementation kararı gerektiren noktalar. Hepsi default çözümle çözülebilir; MANDATORY BLOCKER YOK.
+
+| GAP ID | Konu | Kaynak Nerede Eksik? | Default Çözüm | Seviye | BLOCKER mı? |
+|---|---|---|---|---|---|
+| GAP-06-01 | `canonical_json` custom `default(o)` fonksiyonu, frozen dataclass'ı nasıl `asdict`'e çevirir? Nested frozen dataclass + Decimal doğru serialize. | CONTRACTS/EPICS JSON davranışı yazılmamış. | `dataclasses.is_dataclass(o)` → `dataclasses.asdict(o)` (field decl order preserved), sonra tüm dict sort_keys deep. Decimal → str. | MINOR | HAYIR |
+| GAP-06-02 | `envelope_fingerprint()` SHA-256 12hex — prefix mi yoksa suffix mi? Case sensitivity? | ARCHITECTURE-SPINE/CONTRACTS fingerprint algoritması belirtilmemiş. | PREFIX ilk 12 hex lowercase. (2^48 collision negligible internal.) | MINOR | HAYIR |
+| GAP-06-03 | `canonical_symbol()` — `"BTC"` (tek base, quote YOK) kabul edilecek mi? (örn symbol = None olmalı sistem eventlerinde). | CONTRACTS §0 L16 regex BASE_QUOTE = her ikisi de var. Quote missing → invalid. | Quote yoksa Raise ValueError. Yalnız sistem eventlerinde `symbol=None` → builder zaten None geçilebilir, canonical_symbol çağrılmaz. | MINOR | HAYIR |
+| GAP-06-04 | `build_valid_envelope()` partial override: `quality_flags` ve `clock_ref` alanları için dict geçilebiliyor mu (şekil dönüşümü), yoksa sadece gerçek S-FND-05 dataclass instance mı kabul ediyor? | Builder signature SPEC §6.1'de `quality_flags: object \| None` şeklinde geçiyor ama detay yok. | Default: İKİSİ de kabul et. Dict → uygun dataclass constructor'a dönüştür (build helper). Gerçek instance → doğrudan kullan. (Downstream kullanıcı kolaylığı.) | MINOR | HAYIR |
+| GAP-06-05 | `append_quality_reason` — duplicate code idempotent: aynı code + farklı message → second append OLACAK mı? "code unique" kuralı: reasons listinde aynı code 1 kez mi olmalı? | CONTRACTS L65 reasons[] no duplicate rule. | Default: **code uniqueness (first message wins).** Aynı code → ikinci append NOOP, message değişmez. (Append sadece code ilk kez ekleniyorsa.) | MINOR | HAYIR |
+| GAP-06-06 | `ulid_compare` — UUIDv7 string (8-4-4-4-12 format) ile ULID Crockford (26 base32) aynı fonksiyonda compare edilecek mi? Formatlar farklı; karşılaştırılabilirler mi? | CONTRACTS §0 L14 "ULID or UUIDv7 sortable" diyor ama cross compare yok. | Default: SAME format ise lex compare. FARKLI format ise raise TypeError. (Mix format'ta sıralama anlamlı değil; downstream separate eder.) | MINOR | HAYIR |
+| GAP-06-07 | `now_instant_utc_fixture()` — fractional digit sayısı kaç? (1-6 izinli; ancak CONTRACTS L15 "3 haneli ms" diyor.) | SPEC L124 (CONTRACTS) 3 digit. S-FND-05 INSTANT_RGX 1-6 izin. | Default: **3 haneli fractional (ms)** consistent CONTRACTS L15 örnek format ile. | MINOR | HAYIR |
+| GAP-06-08 | `set_quality_flag(qf, flag_name, val)` — flag_name unknown string (ör. `"degraded"`) → FC-16 raise + unknown flag ne olacak? | **Default Safety Choice (non-binding, future may explicit allow)**: HR-12 degraded manual reject; other unknown nasıl? | Default: Bilinmeyen flag_name → raise ValueError. Bilinen 7 flag (stale/missing/duplicate/out_of_order/invalid/quarantined — 6 + degraded (reject non-binding safety)) → sadece 6 tanesi toggle edilebilir; degraded sadece auto. (Not: degraded reject CONTRACTS'ta açık mandatory normatif değil; güvenlik için default seçim — future explicit izin verilebilir.) | MINOR | HAYIR |
+
+---
+
+Toplam: 8 GAP. Hepsi MINOR. Hepsi default çözüm mevcut. **0 Mandatory Blocker.** Implementation-phase defaults uygulanır → ok.
