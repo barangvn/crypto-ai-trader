@@ -13,15 +13,23 @@ from .models import (
 )
 
 
-def coerce_bool(value: str, source: str, field: str) -> bool:
-    v = (value or "").strip().lower()
-    if v in ("true", "1", "yes", "on"):
-        return True
-    if v in ("false", "0", "no", "off", ""):
-        return False
+def coerce_bool(value: str | bool, source: str, field: str) -> bool:
+    # STRICT boolean coercion (OD-04 / D-02).
+    # Accepts native ``bool`` and the canonical literals ``true``/``false``/
+    # ``1``/``0`` (case-insensitive, surrounding whitespace trimmed).
+    # Everything else fails closed: ``yes``/``no``/``on``/``off``/``y``/``n``,
+    # empty string, ``None``, numeric types and other tokens.
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in ("true", "1"):
+            return True
+        if v in ("false", "0"):
+            return False
     raise ConfigValidationError(
         fields=[field],
-        reason=f"Boolean coerce failed for value '{value}' (strict bool only: true/false/1/0/yes/no/on/off)",
+        reason=f"Boolean coerce failed for value '{value}' (strict bool only: true/false/1/0)",
         source_file=source,
     )
 
@@ -77,7 +85,7 @@ def parse_safety(parser: configparser.ConfigParser, source: str) -> EnvSafetyLoc
         )
     return EnvSafetyLocks(
         trading_permission_default=trading_b,
-        allow_external_creds=api_b,
+        allow_api_keys=api_b,
         max_leverage_allowed=lev_i,
         allow_short=short_b,
     )

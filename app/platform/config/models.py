@@ -14,7 +14,7 @@ _SA_TRADING = "trading_permission" + "_default"
 @dataclass(frozen=True)
 class EnvSafetyLocks:
     trading_permission_default: bool = False
-    allow_external_creds: bool = False
+    allow_api_keys: bool = False
     max_leverage_allowed: int = 1
     allow_short: bool = False
 

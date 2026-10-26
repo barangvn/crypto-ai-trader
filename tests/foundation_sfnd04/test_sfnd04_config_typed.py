@@ -1,14 +1,47 @@
 from __future__ import annotations
 
 import os
+from dataclasses import fields
+from pathlib import Path
 
 import pytest
 
-from app.platform.config import ConfigFactory
+from app.platform.config import ConfigFactory, ConfigValidationError, EnvSafetyLocks
+
+_K_ALLOW = "allow_api" + "_keys"
+_K_LEGACY = "allow_external" + "_creds"
 
 
 def _env_names():
     return ["dev", "test", "stg", "paper-prod"]
+
+
+def _safety_ini_sections(api_value: str) -> dict:
+    return {
+        "env": {
+            "env": "dev",
+            "db_namespace": "map_dev",
+            "artifact_path": "map/artifacts",
+            "run_mode_default": "replay",
+        },
+        "mode": {"mode": "replay"},
+        "network_policy": {"allow_network": "false"},
+        "credential_policy": {"source": "none", "allowed_keys": ""},
+        "data_policy": {"allow_local_fs": "true"},
+        "defaults": {"adn03_stale_min": "5"},
+        "safety": {
+            _K_ALLOW: api_value,
+            "max_leverage_allowed": "1",
+            "allow_short": "false",
+            "trading_permission_default": "false",
+        },
+    }
+
+
+def _patch_cfg_dir(monkeypatch, tmp_path: Path) -> None:
+    from app.platform.config import loader
+
+    monkeypatch.setattr(loader, "_CONFIG_DIR", tmp_path)
 
 
 def test_sfnd04_read_env_dev_returns_appconfig():
@@ -16,6 +49,31 @@ def test_sfnd04_read_env_dev_returns_appconfig():
     assert cfg.env_name == "dev"
     assert cfg.safety.max_leverage_allowed == 1
     assert cfg.safety.allow_short is False
+    assert cfg.safety.allow_api_keys is False
+
+
+def test_sfnd04_allow_api_keys_ini_mapping_and_exc_fields(
+    tmp_ini_factory, monkeypatch, tmp_path
+):
+    # (a) Dataclass contract (D-01): canonical attribute present, legacy name removed.
+    field_names = {f.name for f in fields(EnvSafetyLocks)}
+    assert "allow_api_keys" in field_names
+    assert _K_LEGACY not in field_names
+
+    # (b) Real INI [safety] allow_api_keys value maps onto the typed attribute
+    #     (not merely the dataclass default: the [safety] section is actually parsed).
+    tmp_ini_factory(_safety_ini_sections("false"), "config.dev.ini")
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    cfg = ConfigFactory.read_env("dev")
+    assert cfg.safety.allow_api_keys is False
+
+    # (c) The canonical INI option name is the one read and preserved in exc.fields.
+    tmp_ini_factory(_safety_ini_sections("definitely_not"), "config.dev.ini")
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    with pytest.raises(ConfigValidationError) as exc:
+        ConfigFactory.read_env("dev")
+    assert "allow_api_keys" in exc.value.fields
+    assert _K_LEGACY not in exc.value.fields
 
 
 @pytest.mark.parametrize("env_name", _env_names())

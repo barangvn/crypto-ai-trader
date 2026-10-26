@@ -118,3 +118,130 @@ db_namespace = bad
     except (configparser.Error, ConfigValidationError):
         raised = True
     assert raised, "Expected failclosed raise for malformed INI (unterminated section)"
+
+
+# --- Package C / K-3: public audit API ``read_env(..., return_audit=True)`` ---
+
+
+def test_sfnd04_read_env_default_returns_appconfig():
+    from app.platform.config import AppConfig
+
+    result = ConfigFactory.read_env("dev")
+    assert isinstance(result, AppConfig)
+    assert not isinstance(result, tuple)
+
+
+def test_sfnd04_return_audit_default_is_false():
+    import inspect
+
+    sig = inspect.signature(ConfigFactory.read_env)
+    assert "return_audit" in sig.parameters
+    assert sig.parameters["return_audit"].default is False
+
+
+def test_sfnd04_read_env_return_audit_true_returns_exact_tuple():
+    result = ConfigFactory.read_env("dev", return_audit=True)
+    assert isinstance(result, tuple)
+    assert len(result) == 2
+
+
+def test_sfnd04_return_audit_tuple_types():
+    from app.platform.config import AppConfig
+
+    cfg, records = ConfigFactory.read_env("dev", return_audit=True)
+    assert isinstance(cfg, AppConfig)
+    assert isinstance(records, list)
+    assert len(records) >= 1
+    for rec in records:
+        assert isinstance(rec, ConfigReadAuditRecord)
+
+
+def test_sfnd04_return_audit_record_schema_matches_k3():
+    _cfg, records = ConfigFactory.read_env("dev", return_audit=True)
+    rec = records[-1]
+    assert rec.source_file.endswith("config.dev.ini")
+    assert rec.valid_safety is True
+    assert isinstance(rec.md5, str) and len(rec.md5) == 32
+    assert rec.correlation_id is None or isinstance(rec.correlation_id, str)
+
+
+def test_sfnd04_return_audit_no_secret_fields():
+    _cfg, records = ConfigFactory.read_env("dev", return_audit=True)
+    allowed = {"source_file", "md5", "valid_safety", "correlation_id"}
+    for rec in records:
+        d = rec.to_dict()
+        assert set(d.keys()) == allowed
+        for key, val in d.items():
+            if isinstance(val, str):
+                low = val.lower()
+                assert "api_key" not in low
+                assert "secret" not in low
+                assert "password" not in low
+
+
+def test_sfnd04_return_audit_deterministic():
+    payloads = {
+        sha_json([rec.to_dict() for rec in ConfigFactory.read_env("dev", return_audit=True)[1]])
+        for _ in range(10)
+    }
+    assert len(payloads) == 1
+
+
+def test_sfnd04_audit_no_accumulation_across_calls():
+    lengths = [len(ConfigFactory.read_env("dev", return_audit=True)[1]) for _ in range(5)]
+    assert len(set(lengths)) == 1
+    assert lengths[0] >= 1
+
+
+def test_sfnd04_audit_public_list_isolation_from_private_state():
+    cfg, records = ConfigFactory.read_env("dev", return_audit=True)
+    private = getattr(cfg, "_audit_trail")
+    assert records is not private
+    assert records == private
+
+    # Public listenin/kayıtların değiştirilmesi private state'i ETKİLEMEZ.
+    records.clear()
+    records.append(
+        ConfigReadAuditRecord(source_file="tampered", md5="0" * 32, valid_safety=False)
+    )
+    assert getattr(cfg, "_audit_trail") == private
+    assert len(getattr(cfg, "_audit_trail")) == 1
+
+    # Sonraki çağrı da etkilenmez ve tam/bağımsız kayıt döner.
+    _cfg2, records2 = ConfigFactory.read_env("dev", return_audit=True)
+    assert len(records2) == 1
+    assert records2[0].source_file.endswith("config.dev.ini")
+    assert records2[0].valid_safety is True
+
+
+def test_sfnd04_return_audit_error_behavior_preserved(tmp_ini_factory, monkeypatch, tmp_path):
+    from app.platform.config import ConfigValidationError
+    from tests.foundation_sfnd04.test_sfnd04_validation import _inject, _patch_cfg_dir
+
+    _inject(tmp_path, tmp_ini_factory, {"safety": {"max_leverage_allowed": "2"}})
+    _patch_cfg_dir(monkeypatch, tmp_path)
+
+    with pytest.raises(ConfigValidationError) as exc_default:
+        ConfigFactory.read_env("dev")
+    with pytest.raises(ConfigValidationError) as exc_audit:
+        ConfigFactory.read_env("dev", return_audit=True)
+
+    # Kısmi (cfg, records) dönmez; validation hatası her iki modda da yükseltilir.
+    assert exc_audit.value.fields == exc_default.value.fields
+    assert "max_leverage_allowed" in exc_audit.value.fields
+
+
+def test_sfnd04_allow_api_keys_and_strict_coercion_unaffected_by_audit_api():
+    from app.platform.config import ConfigValidationError
+    from app.platform.config.validation import coerce_bool
+
+    cfg = ConfigFactory.read_env("dev")
+    assert cfg.safety.allow_api_keys is False
+
+    # STRICT coercion (OD-04 / D-02) korunur: legacy token'lar reddedilir.
+    for token in ("yes", "no", "on", "off", "y", "n", ""):
+        with pytest.raises(ConfigValidationError):
+            coerce_bool(token, "src", "field")
+    assert coerce_bool("true", "src", "field") is True
+    assert coerce_bool("0", "src", "field") is False
+    assert coerce_bool(True, "src", "field") is True

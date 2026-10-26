@@ -6,6 +6,7 @@ import pytest
 
 from app.platform.config import ConfigFactory, ConfigValidationError
 from app.platform.config.loader import _YAML_DISABLED_MSG, _YAML_ENABLED
+from app.platform.config.validation import coerce_bool
 
 
 def _inject(tmp_path: Path, tmp_ini_factory, extra_sections: dict, name: str = "config.dev.ini") -> Path:
@@ -64,11 +65,14 @@ def test_sfnd04_allow_ext_creds_true_failclosed(tmp_ini_factory, monkeypatch, tm
 
 
 def test_sfnd04_trading_permission_true_failclosed(tmp_ini_factory, monkeypatch, tmp_path):
-    _inject(tmp_path, tmp_ini_factory, {"safety": {"trading_permission_default": "yes"}})
+    # Safety-lock intent: a canonical truthy literal must reach the FC-3 lock,
+    # not fail earlier in the STRICT coercion stage (see _strict rejection tests).
+    _inject(tmp_path, tmp_ini_factory, {"safety": {"trading_permission_default": "true"}})
     _patch_cfg_dir(monkeypatch, tmp_path)
     with pytest.raises(ConfigValidationError) as exc:
         ConfigFactory.read_env("dev")
     assert "trading_permission_default" in exc.value.fields
+    assert "Safety lock violation" in exc.value.reason
 
 
 def test_sfnd04_missing_env_section_failclosed(tmp_ini_factory, monkeypatch, tmp_path):
@@ -149,3 +153,99 @@ def test_sfnd04_boolean_coerce_strict_invalid(tmp_ini_factory, monkeypatch, tmp_
         ConfigFactory.read_env("dev")
     assert "allow_short" in exc.value.fields
     assert "Boolean coerce failed" in exc.value.reason
+
+
+# --- D-02 STRICT boolean coercion contract (OD-04) ---------------------------
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("true", True),
+        ("True", True),
+        ("TRUE", True),
+        ("  true  ", True),
+        ("1", True),
+        (" 1 ", True),
+        ("false", False),
+        ("False", False),
+        ("FALSE", False),
+        ("  false  ", False),
+        ("0", False),
+    ],
+)
+def test_sfnd04_coerce_bool_strict_accepts_canonical_literals(raw, expected):
+    assert coerce_bool(raw, "src", "field") is expected
+
+
+@pytest.mark.parametrize(("raw", "expected"), [(True, True), (False, False)])
+def test_sfnd04_coerce_bool_strict_accepts_native_bool(raw, expected):
+    assert coerce_bool(raw, "src", "field") is expected
+
+
+@pytest.mark.parametrize("raw", ["yes", "no", "on", "off", "y", "n", "YES", "Off", " truee "])
+def test_sfnd04_coerce_bool_strict_rejects_legacy_tokens(raw):
+    with pytest.raises(ConfigValidationError) as exc:
+        coerce_bool(raw, "src", "target_field")
+    assert "target_field" in exc.value.fields
+    assert "Boolean coerce failed" in exc.value.reason
+    assert "strict bool only: true/false/1/0" in exc.value.reason
+
+
+@pytest.mark.parametrize("raw", ["", "   ", None])
+def test_sfnd04_coerce_bool_strict_rejects_empty_and_none(raw):
+    with pytest.raises(ConfigValidationError) as exc:
+        coerce_bool(raw, "src", "target_field")
+    assert "target_field" in exc.value.fields
+    assert "Boolean coerce failed" in exc.value.reason
+
+
+@pytest.mark.parametrize("raw", [1, 0, 1.0, 0.0, [], {"a": 1}, b"true"])
+def test_sfnd04_coerce_bool_strict_rejects_unsupported_types(raw):
+    with pytest.raises(ConfigValidationError) as exc:
+        coerce_bool(raw, "src", "target_field")
+    assert "target_field" in exc.value.fields
+
+
+def test_sfnd04_coerce_bool_strict_rejection_via_read_env(tmp_ini_factory, monkeypatch, tmp_path):
+    # An explicitly invalid token fails closed during coercion (not silently
+    # defaulted, and distinct from a missing field falling back to its default).
+    _inject(tmp_path, tmp_ini_factory, {"safety": {"allow_short": "yes"}})
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    with pytest.raises(ConfigValidationError) as exc:
+        ConfigFactory.read_env("dev")
+    assert "allow_short" in exc.value.fields
+    assert "Boolean coerce failed" in exc.value.reason
+
+
+def test_sfnd04_coerce_bool_strict_preserves_allow_api_keys_field(
+    tmp_ini_factory, monkeypatch, tmp_path
+):
+    _inject(tmp_path, tmp_ini_factory, {"safety": {_K_ALLOW: "off"}})
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    with pytest.raises(ConfigValidationError) as exc:
+        ConfigFactory.read_env("dev")
+    assert _K_ALLOW in exc.value.fields
+
+
+def test_sfnd04_coerce_bool_strict_observability_metrics_rejected(
+    tmp_ini_factory, monkeypatch, tmp_path
+):
+    _inject(tmp_path, tmp_ini_factory, {"observability": {"metrics_enabled": "on"}})
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    with pytest.raises(ConfigValidationError) as exc:
+        ConfigFactory.read_env("dev")
+    assert "metrics_enabled" in exc.value.fields
+    assert "Boolean coerce failed" in exc.value.reason
+
+
+def test_sfnd04_missing_safety_section_uses_defaults(tmp_ini_factory, monkeypatch, tmp_path):
+    # Missing config field -> defaults apply (no coercion error); this is a
+    # DIFFERENT behavior from explicitly passing an invalid token.
+    _inject(tmp_path, tmp_ini_factory, {})
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    cfg = ConfigFactory.read_env("dev")
+    assert cfg.safety.allow_short is False
+    assert cfg.safety.allow_api_keys is False
+    assert cfg.safety.trading_permission_default is False
+    assert cfg.safety.max_leverage_allowed == 1

@@ -5,7 +5,7 @@ import copy
 import hashlib
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from .constants import VERSION_CONSTANTS
 from .errors import ConfigValidationError
@@ -96,7 +96,10 @@ class ConfigFactory:
         return data
 
     @staticmethod
-    def read_env(env_name: Optional[str] = None) -> AppConfig:
+    def read_env(
+        env_name: Optional[str] = None,
+        return_audit: bool = False,
+    ) -> Union[AppConfig, tuple[AppConfig, list[ConfigReadAuditRecord]]]:
         if env_name is None:
             env_name = os.environ.get("CRYPTO_AI_ENV", "dev")
         if env_name not in _VALID_ENVS:
@@ -160,6 +163,13 @@ class ConfigFactory:
             valid_safety=True,
         )
         object.__setattr__(cfg, "_audit_trail", [audit])
+        if return_audit:
+            # K-3: public audit listesi private ``_audit_trail`` ile
+            # paylaşılmaz; her çağrı bağımsız ve deterministik bir kopya döner.
+            public_records: list[ConfigReadAuditRecord] = copy.deepcopy(
+                getattr(cfg, "_audit_trail")
+            )
+            return cfg, public_records
         return cfg
 
 
