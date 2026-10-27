@@ -194,6 +194,31 @@ Bu dört sonuç TOPLANMAZ ve "full regression passed" iddiası ÜRETİLMEZ.
 ### KALIR AÇIK
 - **MINOR-7 (Package D):** A-2 violated-field audit alanı, A-3 `VersionConstants` fingerprint fonksiyonu, A-4 baseline MD5 comparison/WARNING — KAPSAM DIŞI; UYGULANMADI, kapatılmış gösterilmez.
 
-### COMMIT READY — Güncel (Package C implementation sonrası)
+### COMMIT READY — [HISTORICAL] (Package C implementation sonrası anlık görüntü)
+> ⚠ **[HISTORICAL]** Bu blok, Package C implementation turu SONUNDA yazılmış tarihli anlık görüntüdür ve SİLİNMEZ. Güncel (Package D deferral reconciliation sonrası) durum için §10'a bakınız.
 - **PACKAGE C DOC STATUS = PASS** — as-built gap notları uzlaştırıldı.
 - **COMMIT READY = NO** — yalnız MINOR-7 (Package D) KALIR AÇIK. Bu oturumda `stage = 0, commit = 0, push = 0`; production/test/doküman değişiklikleri commit EDİLMEDİ.
+
+---
+
+## §10 — STATUS UPDATE (2026-10-26, Package D Deferral Reconciliation)
+
+§6/§7/§8/§9 tarihsel snapshot'lardır ve SİLİNMEZ. Bu bölüm, Package D (A-2/A-3/A-4) erteleme uzlaştırması sonrası GÜNCEL durumu ayrı kaydeder. `COMMIT READY` terimi burada ÜÇ AYRI kavram olarak ayrılır ve tek bir kavrammış gibi kullanılmaz.
+
+### Güncel durum (as-built)
+- **Package A/B/C (KOD):** `d4ec0ae` commit'inde kayıtlı (implementasyon: `allow_api_keys`, STRICT `coerce_bool`, `read_env(env_name=None, return_audit=False)` audit API).
+- **S-FND-04 DOKÜMANTASYON:** `adcebc7` commit'inde kayıtlı.
+- **Package D (A-2/A-3/A-4):** `DEFERRED — NOT IMPLEMENTED`. Onaylı erteleme kaydı `open-decisions.md` → `DEF-SFND04-D04`'te belgelenmiştir; bağımsız denetimde `APPROVED DEFERRAL — VALID` olarak değerlendirilmiştir.
+
+### COMMIT READY teriminin ayrımı
+| Kavram | Güncel durum |
+|---|---|
+| Kod commit'i (Package A/B/C) | `d4ec0ae` commit'inde kayıtlı. |
+| Dokümantasyon commit'i | `adcebc7` commit'inde kayıtlı. Package D deferral reconciliation sonrası bu üç dosya (`open-decisions.md` / `implementation-readiness.md` / `test-plan.md`) için YENİ dokümantasyon commit'i henüz OLUŞTURULMADI (bağımsız doğrulama bekliyor). |
+| Story kapanışı | AÇIK. Package D maddeleri ÇÖZÜLMÜŞ DEĞİLDİR; story kapanışında erteleme YENİDEN DEĞERLENDİRİLMELİDİR. |
+
+### A-2/A-3/A-4 — uygulanmadı, çözülmedi
+Erteleme kaydının onaylı olması, A-2/A-3/A-4'ün UYGULANDIĞI veya ÇÖZÜLDÜĞÜ anlamına GELMEZ. Bu maddeler SPEC §10'da KORUNAN gereksinim olarak açık kalır (AC/DoD'de bağlayıcı satır yokluğu, SPEC kapsamındaki gereksinimleri ortadan kaldırmaz). Ayrı takip işi, uygulama kanıtı ve kabul koşulları doğrulanmadan çözülmüş sayılmaz (bkz. `open-decisions.md` → DEF-SFND04-D04 takip koşulu 7).
+
+### Sınır
+Bu bölüm tam regresyon geçtiğini veya Package D'nin tamamlandığını İDDİA ETMEZ. Runtime kanıt §9'daki AYRI kayıtlardır ve TOPLANMAZ. Git: `stage = 0, commit = 0, push = 0`.

@@ -177,3 +177,28 @@ STATUS: **✔ APPROVED — SCOPED K0 EXCEPTION (S-FND-04 Package C / K-3)** — 
 | Git sınırı | **Stage, commit ve push izni VERİLMEDİ** (stage = 0, commit = 0, push = 0). |
 | Uygulama Durumu | ✔ **UYGULANDI (Package C / K-3 — 2026-10-26):** `loader.py` `read_env(env_name=None, return_audit=False)` eklendi; `return_audit=True` → `copy.deepcopy` ile bağımsız `(cfg, records)` döner; legacy `_audit_trail` ve validation davranışı korundu. Hedef test `tests/foundation_sfnd04/test_sfnd04_determinism_audit.py` public sözleşme/mutability/determinism/hata/hassas-veri/legacy testleriyle genişletildi; grup → 90 passed, exit 0. Kapsam: yalnız bu EX'te izin verilen dosyalar (`loader.py`, `test_sfnd04_determinism_audit.py`). Package D UYGULANMADI. |
 | Silent Resolved Risk | ✅ **0 Silent** — K-3 kararı, EX kaydı ve as-built gap bu dosyada explicit. Package D kapsam dışıdır ve kapatılmış gösterilmez. |
+
+---
+
+# DEFERRAL REGISTER (SCOPE-OWNER ONAYLI ERTELEME) — S-FND-04
+
+KURAL: Aşağıdaki kayıt, Package D maddelerinin scope owner onayıyla AYRI bir takip işine ERTELENDİĞİNİ belgeleyen resmi erteleme kaydıdır. Bu bölüm mevcut OD/K-3/EX kayıtlarını DEĞİŞTİRMEZ; yalnız ek audit izi bırakır. Erteleme, maddelerin UYGULANDIĞI veya ÇÖZÜLDÜĞÜ anlamına GELMEZ.
+
+## DEF-SFND04-D04: Package D (A-2/A-3/A-4) Ayrı Takip İşine Erteleme
+STATUS: **⏸ DEFERRED — NOT IMPLEMENTED** — Scope Owner Onaylı Erteleme Kaydı
+
+| Öğe | Detay |
+|---|---|
+| Karar | Package D (A-2/A-3/A-4), Package A/B/C kapsamından AYRILARAK ayrı bir takip işine ERTELENİR. Bu maddeler mevcut teslimin bir parçası DEĞİLDİR ve tamamlanmış/çözümlenmiş olarak sunulamaz. |
+| Kapsam (ertelenen maddeler) | **A-2** violated-field audit alanı (`ConfigReadAuditRecord`'a ihlal edilen alan + maskeli raw value). **A-3** `VersionConstants` fingerprint fonksiyonu (`sha256(VersionConstants json)[:8]`). **A-4** 4 env INI baseline MD5 comparison / WARNING davranışı. |
+| Kaynak (SPEC / AC / DoD traceability) | **SPEC.md §10 L187-192:** her madde `⚠ AS-BUILT (§21 MINOR-7, IMPLEMENTATION GAP)` notuyla "Gereksinim korunur, karşılanmadı → gap" olarak işaretli. **SPEC.md §21:** L273 "MINOR-7 KALIR AÇIK (Package D). Kapatılmamış kod gap'i kapatılmış gibi gösterilmez."; L292 `| MINOR-7 | A-2/A-3/A-4 | IMPLEMENTATION GAP |`; L297 "IMPLEMENTATION GAP (KALIR AÇIK): MINOR-7 (A-2/A-3/A-4 → Package D)"; L299 "MINOR-7 yalnızca doküman düzenlemesiyle kapatılamaz". **acceptance-criteria.md:** A-2/A-3/A-4 için AC satırı YOK (AC-01..AC-24 içinde eşleşme yok). **dod.md:** A-2/A-3/A-4 için DoD satırı YOK (DoD-1..DoD-8 içinde eşleşme yok). |
+| Normatif olarak zorunlu mu? | **HAYIR.** A-2/A-3/A-4, SPEC §10'da KORUNAN gereksinimdir ancak bağlayıcı bir AC veya DoD maddesi DEĞİLDİR (AC/DoD'de satır yokluğu doğrulandı). Dolayısıyla Package A/B/C kabulünü ENGELLEMEZ; ancak SPEC gereksinimi olarak açık kalır. Bu nedenle erteleme, "non-blocking" gerekçesiyle sessizce kapatma değil, **scope owner tarafından açıkça onaylanan resmi erteleme**dir. |
+| Mevcut implementation durumu | **UYGULANMADI.** Production'da violated-field audit alanı YOK (`ConfigReadAuditRecord` ihlal alanı/maskeli raw value içermez); `VersionConstants` fingerprint fonksiyonu YOK (yalnız test helper `sha_json()` sha256[:12] üretir); baseline MD5 comparison / WARNING üretimi YOK (`read_env` md5 hesaplar ama S-FND-01 baseline ile karşılaştırma yapmaz). |
+| Package A/B/C kabulüne etkisi | **ETKİLEMEZ.** Package A (D-01)/B (D-02)/C (K-3) implementasyonu `d4ec0ae`, dokümantasyonu `adcebc7` commit'lerinde kayıtlıdır; A-2/A-3/A-4 bu commit içeriklerinin parçası değildir. |
+| Gerekçe | Bu özellikler mevcut A/B/C implementasyon commit'inin bir parçası DEĞİLDİR. Ayrı uygulama kapsamı, açık test planı, kabul kriterleri ve bağımsız doğrulama gerektirir. Ayrıca bu maddeler AC/DoD kapsamında bağlayıcı olmadığından A/B/C teslimi engellenmeden ayrı bir takip işine ertelenebilir. |
+| Onay | Scope owner tarafından onaylanan erteleme (Package D → ayrı takip işi). |
+| Takip koşulları | 1. Ayrı bir takip işi veya story açılması. 2. Her madde (A-2/A-3/A-4) için SPEC/AC/DoD izlenebilirliğinin kurulması. 3. K0 veya benzeri mevcut dosya değişikliklerini yöneten kurallar gerekiyorsa açık istisnanın kaydedilmesi. 4. Public API ve audit schema (özellikle `ConfigReadAuditRecord`) etkisinin belirlenmesi. 5. Test planı ve gerçek runtime kanıtının üretilmesi. 6. Ayrı implementasyon ve bağımsız final audit. **7. S-FND-04 story kapanışında bu erteleme YENİDEN DEĞERLENDİRİLMELİDİR; takip işi, uygulama kanıtı ve kabul koşulları doğrulanmadan A-2/A-3/A-4 çözülmüş SAYILMAZ.** |
+| Kapsam sınırı | Bu erteleme `d4ec0ae` veya `adcebc7` commit içeriklerini DEĞİŞTİRMEZ; Package A/B/C test sonuçlarını yeniden TANIMLAMAZ; hiçbir başka story'yi KAPSAMAZ. |
+| Diğer kayıtlarla ilişki | K-3 kaydındaki "Package D kapsam dışı" (L119) ve EX-K0-SFND04-D03 "Kapsam dışı" (L175) hükümleriyle ÇELİŞMEZ; aksine bu erteleme onları teyit eder. Erteleme, MINOR-7 gap'ini kapatmış saymaz. |
+| Git sınırı | Bu aşamada **stage = 0, commit = 0, push = 0**. |
+| Silent Resolved Risk | ✅ **0 Silent** — erteleme kararı ve kapsam sınırı bu dosyada explicit kayıt altına alındı; maddeler açık ve uygulanmamış olarak görünür kalır. |
