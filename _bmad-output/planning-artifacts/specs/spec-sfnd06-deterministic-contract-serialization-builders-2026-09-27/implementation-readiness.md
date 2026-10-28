@@ -75,21 +75,42 @@ Her bölümü puanla: 1 = tamamlandı, 0 = eksik.
 
 ## CURRENT STATUS — POST-IMPLEMENTATION (reconciled)
 
-> Yukarıdaki A-N skoru ve VERDICT, planlama anına ait **tarihsel** kayıttır. Bu bölüm, S-FND-06 implementasyonu sonrası **güncel** durumu yalnızca bu oturumda doğrulanan kanıtlara dayanarak ayırır. Bu turda hiçbir test YENİDEN ÇALIŞTIRILMAMIŞTIR; dolayısıyla aşağıda test PASS sayısı iddiası yoktur.
+> Yukarıdaki A-N skoru ve VERDICT, planlama anına ait **tarihsel** kayıttır. Bu bölüm, S-FND-06 implementasyonu sonrası **güncel** durumu doğrulanan kanıtlara dayanarak ayırır. Bu bölümün ilk sürümünde hiçbir test çalıştırılmamış ve test PASS sayısı iddiası yapılmamıştı; **bu ifade artık geçerli DEĞİLDİR**. Sonrasında yapılan **FRESH TEST EXECUTION GATE** ile Grup A/B/C gerçek sonuçları aşağıdaki **TEST EVIDENCE** bölümünde kaydedilmiştir.
 
 | Alan | Güncel durum | Kanıt |
 |---|---|---|
-| S-FND-06 implementation | **Completed (local)** | HEAD = `a4e8066` — "feat: implement S-FND-06 deterministic contract serialization & canonical builders" (`git log`). |
+| S-FND-06 implementation | **Completed (local)** | İmpl commit = `a4e8066` — "feat: implement S-FND-06 deterministic contract serialization & canonical builders" (`git log`). **Güncel HEAD = `cdbedae` (`cdbedae015e5b0193de7ab184dbc34921e52d155`) — "docs: correct S-FND-06 public API export count comments"** (`git rev-parse HEAD`). |
 | Commit kapsamı | 27 dosya, 2610 insertions | `git show --stat a4e8066`. |
-| Remote sync | **ahead 8** | `git status -sb` → `## master...origin/master [ahead 8]` (HEAD = `c6e2828`). (Tarihsel `ahead 0/0` ve önceki `ahead 1` iddiası artık geçersiz.) |
+| Remote / upstream sync | **ahead 10** | `git status --short --branch` → `## master...origin/master [ahead 10]`; `git rev-parse HEAD` = `cdbedae`; `git rev-parse origin/master` = `9314eb4`. (Tarihsel `ahead 0/0`, `ahead 1` ve `ahead 8` iddiaları artık geçersiz.) |
 | Working tree | 1 modified + 2 untracked | `git status -sb`: `M …/spec-eapi-…/source-traceability.md` + 2 E-API untracked dosya (bu uzlaştırma turunun kapsamı DIŞINDA); S-FND-06 companion dokümanları artık **committed** (`a4e8066` + `f5cb248`). |
 | Companion doc reconciliation (bu tur) | C1, C2, C3, C4 uygulandı; C6 (bu dosya) uzlaştırıldı | Yalnız 5 izinli dosya düzenlendi; Git işlemi yapılmadı. |
-| Doküman commit'ine hazırlık | **HENÜZ DEĞİL** — bağımsız iç-tutarlılık denetimi bekliyor | `a4e8066` implementasyon commit'i, kalan companion dokümanların OTOMATİK onayı SAYILMAZ. |
+| Doküman commit durumu | **Yerel commit'ler MEVCUT; PUSH YOK; hikâye kapanışı ONAYLANMADI** | S-FND-06 doc commit'leri yerel Git geçmişinde: `e43f2d3` — "docs: reconcile S-FND-06 spec traceability"; `cdbedae` — "docs: correct S-FND-06 public API export count comments" (`git log`). Push yapılmadı (`ahead 10`). C5(b) yorum/docstring remediation'ı `cdbedae015e5b0193de7ab184dbc34921e52d155` ile commit edilip **TAMAMLANDI**; C5(b) mevcut kabul kapsamı kararı (TP-01 / AC-01 ile sınırlı) **KAPATILDI**. S-FND-06 hikâyesi henüz kapanmadı; açık kalemler için aşağıdaki **TEST EVIDENCE** (regresyon `FAIL`, DoD `PARTIAL/UNVERIFIED`) ve **UNRESOLVED / OPEN** bölümlerine bakınız. `a4e8066` implementasyon commit'i, kalan companion dokümanların OTOMATİK onayı SAYILMAZ. |
+
+## TEST EVIDENCE — FRESH TEST EXECUTION GATE
+
+> Çalıştırılmış, gerçek test sonuçları (HEAD = `cdbedae015e5b0193de7ab184dbc34921e52d155`; `PYTHONDONTWRITEBYTECODE=1` + `-p no:cacheprovider`).
+
+| Grup | Komut kapsamı | Exit | Passed | Failed | Skipped |
+|---|---|---|---|---|---|
+| A — Smoke + public API | `test_sfnd06_imports_public_api.py` + `test_sfnd06_version_alignment.py` | **0** | 10 | 0 | 0 |
+| B — S-FND-06 tam suite | `tests/foundation_sfnd06/` | **0** | 146 | 0 | 0 |
+| C — Upstream regression | `tests/foundation_sfnd05/ foundation_sfnd04/ foundation/ contracts/ api/ failure/` | **1** | 679 | **2** | 1 |
+
+- **REGRESSION STATUS = FAIL** — Grup C genel sonucu `FAIL`'dir. Başarısız iki test:
+  1. `tests/failure/test_bus_no_credentials.py::TestBusNoCredentials::test_event_bus_source_no_credentials_or_live_order_patterns`
+  2. `tests/failure/test_no_credentials.py::test_static_no_api_key_strings`
+- Başarısızların işaret ettiği dosyalar (`app/platform/config/*`, `tests/failure/*`) S-FND-06 implementasyon commit'inde (`a4e8066`) DEĞİŞTİRİLMEMİŞTİR; **ancak bu durum regresyon paketinin tamamının PASS olduğu anlamına GELMEZ**. Bu turda düzeltme/suppress/skip YAPILMAMIŞTIR; sonuç olduğu gibi `FAIL` bırakılmıştır.
+- **DOD-01..10 = PARTIAL/UNVERIFIED** — Grup A/B çıktıları DoD maddelerinin bir kısmını desteklese de, tek başına tüm DoD-01..10 için yeterli kanıt DEĞİLDİR (Grup C `FAIL` + madde-madde kanıt eşlemesi yok). Bu nedenle DoD **doğrulanmış sayılmaz**.
+
+## CLOSED / RESOLVED — C5 remediation kayıtları
+
+- **C5 (a) — RESOLVED** — `SPEC.md` §2/§15'teki eski `(AC 01..12)` / `TP-01..12` etiketleri: doc-only SPEC reconciliation (Option A, scope-owner onaylı) ile gerçek AC/TP envanterine (`acceptance-criteria.md` 20 AC / `test-plan.md` 14 TP) hizalandı. Yalnız `SPEC.md` + bu dosya düzenlendi; kod/test değişmedi.
+- **C5 (b) — REMEDIATION = PASS (yorum/docstring remediation, KAPANMIŞ)** — Public API export sayısı yorumları, kaynaklarla doğrulanan `18` (17 fonksiyon + 1 exception class) değerine hizalandı. İki dosyada YALNIZCA yorum/docstring düzeltildi; `__all__`, import'lar, assertion'lar ve yürütülebilir kod değişmedi. **Commit: `cdbedae015e5b0193de7ab184dbc34921e52d155` — `docs: correct S-FND-06 public API export count comments`** (yalnızca `tests/foundation_sfnd06/test_sfnd06_imports_public_api.py` + `app/contracts/sfnd06_serialize.py`).
+- **C5 (b) — ACCEPTANCE SCOPE = CLOSED (scope-owner onaylı)** — Public API import testinin kabul kapsamı, bu konuşmada scope-owner tarafından **KAPATILDI**. Karar: `tests/foundation_sfnd06/test_sfnd06_imports_public_api.py` içindeki mevcut public API import doğrulaması, belgelenmiş **TP-01 / AC-01** kapsamıyla sınırlı olarak kabul edilir. Public API envanteri **18 export**'tur (17 fonksiyon + 1 exception); AC envanterindeki **20 kriter** sayısı AYRI bir ölçümdür. Bu karar yeni test davranışı, AC veya DoD maddesi OLUŞTURMAZ. Belgelenmiş kabul kapsamını aşan ilave API davranışları **ayrı bir karar** gerektirir. Not: Bu kapsam kararı yalnızca bu dosyada (`implementation-readiness.md`) kaydedilmiştir; `open-decisions.md` veya başka bir dosya güncellenmemiştir.
+- `acceptance-criteria.md`, `hard-red.md`, `source-gaps.md`: bu turda zorunlu değişiklik yok (önceki denetim: kendi içinde tutarlı).
 
 ## UNRESOLVED / OPEN (owner kararı bekleyen)
 
-- **C5 (a)** — `SPEC.md` §2/§15'teki eski `(AC 01..12)` / `TP-01..12` etiketleri: doc-only SPEC reconciliation (Option A, scope-owner onaylı) ile gerçek AC/TP envanterine (`acceptance-criteria.md` 20 AC / `test-plan.md` 14 TP) hizalandı. Yalnız `SPEC.md` + bu dosya düzenlendi; kod/test değişmedi.
-- **C5 (b)** — `tests/test_sfnd06_imports_public_api.py` içindeki public API import testi kabul-kapsamı yorumu: **UNRESOLVED — AYRI KAPSAM KARARI**; bu turda test dosyası ve üretim kodu değiştirilmedi, test çalıştırılmadı, kapsam belirsizliği giderilmiş sayılmaz.
-- `acceptance-criteria.md`, `hard-red.md`, `source-gaps.md`: bu turda zorunlu değişiklik yok (önceki denetim: kendi içinde tutarlı).
+- **Public API — kabul kapsamı ötesi davranışlar:** belgelenmiş kabul kapsamını (TP-01 / AC-01) aşan ilave API davranışı veya yeni gereksinimler **ayrı bir karar** gerektirir; C5(b) mevcut kabul kapsamı kararından AYRI tutulur. **AÇIK.**
 - E-API spec dizinindeki untracked dokümanlar (`REMEDIATION_PROPOSAL_…`, `risks-closed.md`) ve S-FND-02..05 spec dizinleri: **AYRI KAPSAM**.
-- Doküman commit'i öncesi bağımsız iç-tutarlılık denetimi (bu dosya dahil): **BEKLİYOR**.
+- Doküman commit'i öncesi bağımsız iç-tutarlılık denetimi (bu dosya dahil): **PASS — bağımsız readiness iç-tutarlılık denetimi tamamlandı; bu sonuç yalnızca readiness belgesinin tutarlılığına ilişkindir, S-FND-06 hikâye kapanış onayı değildir.**
