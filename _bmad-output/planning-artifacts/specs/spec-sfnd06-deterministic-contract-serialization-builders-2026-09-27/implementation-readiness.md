@@ -81,14 +81,15 @@ Her bölümü puanla: 1 = tamamlandı, 0 = eksik.
 |---|---|---|
 | S-FND-06 implementation | **Completed (local)** | HEAD = `a4e8066` — "feat: implement S-FND-06 deterministic contract serialization & canonical builders" (`git log`). |
 | Commit kapsamı | 27 dosya, 2610 insertions | `git show --stat a4e8066`. |
-| Remote sync | **ahead 1** | `git status -sb` → `## master...origin/master [ahead 1]`. (Tarihsel `ahead 0/0` iddiası artık geçersiz.) |
-| Working tree | 1 modified + birkaç untracked | `git status -sb`: `M …/spec-eapi-…/source-traceability.md` (bu uzlaştırma turunun kapsamı DIŞINDA); S-FND-06 companion dokümanları untracked. |
+| Remote sync | **ahead 8** | `git status -sb` → `## master...origin/master [ahead 8]` (HEAD = `c6e2828`). (Tarihsel `ahead 0/0` ve önceki `ahead 1` iddiası artık geçersiz.) |
+| Working tree | 1 modified + 2 untracked | `git status -sb`: `M …/spec-eapi-…/source-traceability.md` + 2 E-API untracked dosya (bu uzlaştırma turunun kapsamı DIŞINDA); S-FND-06 companion dokümanları artık **committed** (`a4e8066` + `f5cb248`). |
 | Companion doc reconciliation (bu tur) | C1, C2, C3, C4 uygulandı; C6 (bu dosya) uzlaştırıldı | Yalnız 5 izinli dosya düzenlendi; Git işlemi yapılmadı. |
 | Doküman commit'ine hazırlık | **HENÜZ DEĞİL** — bağımsız iç-tutarlılık denetimi bekliyor | `a4e8066` implementasyon commit'i, kalan companion dokümanların OTOMATİK onayı SAYILMAZ. |
 
 ## UNRESOLVED / OPEN (owner kararı bekleyen)
 
-- **C5** — Commit edilmiş `SPEC.md` §2 preview'daki eski `(AC 01..12)` / TP-01..12 etiketleri ve `test_sfnd06_imports_public_api.py` içindeki stale yorum: **AYRI KAPSAM**, bu turda dokunulmadı.
+- **C5 (a)** — `SPEC.md` §2/§15'teki eski `(AC 01..12)` / `TP-01..12` etiketleri: doc-only SPEC reconciliation (Option A, scope-owner onaylı) ile gerçek AC/TP envanterine (`acceptance-criteria.md` 20 AC / `test-plan.md` 14 TP) hizalandı. Yalnız `SPEC.md` + bu dosya düzenlendi; kod/test değişmedi.
+- **C5 (b)** — `tests/test_sfnd06_imports_public_api.py` içindeki public API import testi kabul-kapsamı yorumu: **UNRESOLVED — AYRI KAPSAM KARARI**; bu turda test dosyası ve üretim kodu değiştirilmedi, test çalıştırılmadı, kapsam belirsizliği giderilmiş sayılmaz.
 - `acceptance-criteria.md`, `hard-red.md`, `source-gaps.md`: bu turda zorunlu değişiklik yok (önceki denetim: kendi içinde tutarlı).
 - E-API spec dizinindeki untracked dokümanlar (`REMEDIATION_PROPOSAL_…`, `risks-closed.md`) ve S-FND-02..05 spec dizinleri: **AYRI KAPSAM**.
 - Doküman commit'i öncesi bağımsız iç-tutarlılık denetimi (bu dosya dahil): **BEKLİYOR**.

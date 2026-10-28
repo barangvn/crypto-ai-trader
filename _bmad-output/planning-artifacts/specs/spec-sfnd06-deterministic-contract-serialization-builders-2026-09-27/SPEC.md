@@ -80,18 +80,18 @@ Without this layer, S-RDH-01 (first applied POC) would reimplement serialization
 
 ## 2. Measurable Success (Kanıtlanabilir Başarı)
 
-- **TP-01 (Binary import 3 packages):** `from app.contracts.sfnd06_serialize import canonical_json, envelope_fingerprint` SUCCESS (no ImportError) (AC 01)
-- **TP-02 (10x serialization identity):** Same envelope object → `canonical_json(env)` bytes identical 10/10 iterations → `len(set(digests)) == 1` (AC-02)
-- **TP-03 (10x fingerprint identity):** Same envelope → `envelope_fingerprint(env)` same 12-hex output 10/10 iterations (AC-03)
-- **TP-04 (Symbol canonicalizer):** `"btcusdt"` → `"BTC_USDT"` + regex match; `"BTC/USDT"` → `"BTC_USDT"`; invalid `"<script>"` → raise ValueError (3 AC sub) (AC-04)
-- **TP-05 (Instant validator + generator):** `validate_instant("2026-01-01T00:00:00.123Z")` OK; "+03:00 offset" → ValueError; `now_instant_utc_fixture()` Z suffix (3 AC) (AC-05)
-- **TP-06 (Envelope valid builder):** `build_valid_envelope(event_type="candle.v1", payload=sample_dict)` → all 12 required non-nullable fields present & valid; post-init invariants FC-01..08 PASS; 0 manual 16-field constructor consumer side (AC-06)
-- **TP-07 (QualityFlags builder + degraded invariant):** `build_quality(stale=True)` → degraded auto-True; `append_quality_reason(qf, "STALE_MS", msg)` → reasons list len increases by 1; append duplicate code idempotent (3 AC) (AC-07)
-- **TP-08 (ULID sortable compare):** 2 ULID strings older/newer → `ulid_compare(a,b) == -1/0/1 int` sortable matches string sort (AC-08)
-- **TP-09 (Deterministic JSON rules):** output JSON must have: sort_keys=True, separators=(",", ":"), no whitespace, Decimal→str without exponent, Instant→raw str, bool lowercase, None→null, no default dict-like dataclass fallback raise (6 rule AC sub) (AC-09)
-- **TP-10 (Backward compat / zero regression):** S-FND-05 tests re-run unchanged → `45/45 PASS` (AC-10 baseline preserved)
-- **TP-11 (Fail-closed unknown field):** Envelope.builder with extra non-declared kwarg → raise; unknown quality code → ValueError; invalid JSON default override raise (3 AC) (AC-11)
-- **TP-12 (Version alignment 1.0.0):** All serialized envelope `contract_version="1.0.0"` literal EXACT; all serialized schema_ref contracts_md field = `"CONTRACTS.md@1.0.0"` → EXACT string equality against S-FND-04 VersionConstants (AC-12)
+- **T-01 (Binary import 3 packages):** `from app.contracts.sfnd06_serialize import canonical_json, envelope_fingerprint` SUCCESS (no ImportError) (AC-01)
+- **T-02 (10x serialization identity):** Same envelope object → `canonical_json(env)` bytes identical 10/10 iterations → `len(set(digests)) == 1` (AC-03)
+- **T-03 (10x fingerprint identity):** Same envelope → `envelope_fingerprint(env)` same 12-hex output 10/10 iterations (AC-04)
+- **T-04 (Symbol canonicalizer):** `"btcusdt"` → `"BTC_USDT"` + regex match; `"BTC/USDT"` → `"BTC_USDT"`; invalid `"<script>"` → raise ValueError (3 AC sub) (AC-08/09/10)
+- **T-05 (Instant validator + generator):** `validate_instant("2026-01-01T00:00:00.123Z")` OK; "+03:00 offset" → ValueError; `now_instant_utc_fixture()` Z suffix (3 AC) (AC-11/12/13)
+- **T-06 (Envelope valid builder):** `build_valid_envelope(event_type="candle.v1", payload=sample_dict)` → all 12 required non-nullable fields present & valid; post-init invariants FC-01..08 PASS; 0 manual 16-field constructor consumer side (AC-14/15)
+- **T-07 (QualityFlags builder + degraded invariant):** `build_quality(stale=True)` → degraded auto-True; `append_quality_reason(qf, "STALE_MS", msg)` → reasons list len increases by 1; append duplicate code idempotent (2 AC) (AC-16/17)
+- **T-08 (ULID sortable compare):** 2 ULID strings older/newer → `ulid_compare(a,b) == -1/0/1 int` sortable matches string sort (AC-18)
+- **T-09 (Deterministic JSON rules):** output JSON must have: sort_keys=True, separators=(",", ":"), no whitespace, Decimal→str without exponent, Instant→raw str, bool lowercase, None→null, no default dict-like dataclass fallback raise (6 rule AC sub) (AC-05/06/07)
+- **T-10 (Backward compat / zero regression):** S-FND-05 tests re-run unchanged → `45/45 PASS` (AC-20 baseline preserved)
+- **T-11 (Fail-closed unknown field):** Envelope.builder with extra non-declared kwarg → raise; unknown quality code → ValueError; invalid JSON default override raise (3 AC) (AC-07/15/16)
+- **T-12 (Version alignment 1.0.0):** All serialized envelope `contract_version="1.0.0"` literal EXACT; all serialized schema_ref contracts_md field = `"CONTRACTS.md@1.0.0"` → EXACT string equality against S-FND-04 VersionConstants (AC-02/19)
 
 ## 3. IN / OUT Boundary
 
@@ -342,7 +342,7 @@ def ulid_older(a: str, b: str, /) -> bool: return ulid_compare(a, b) < 0
 
 - Ayrı companion `definition-of-done.md` içinde.
 
-## 15. Test Plan (TP-01..12 + 2 Ekstra)
+## 15. Test Plan (TP-01..14)
 
 - Ayrı companion `test-plan.md` içinde. Unit + negatif + invariant + determinism + parity + HRC + K0 regression.
 
