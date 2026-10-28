@@ -6,10 +6,9 @@ internal implementation modules; it contains no logic of its own.
 
 Import path: `app.contracts.sfnd06_serialize`.
 
-NOTE (documented SPEC count drift, D-06-A): the SPEC §6.1 heading / P01 / DoD#8 /
-TP-01 describe the public API as "13 fonksiyon + 1 exception", but the §6.1
-signature body explicitly defines 17 functions + 1 exception. Per "do not invent
-behavior", the full §6.1 body is implemented and exported here — no function is
+Public API surface: SPEC §6.1 (heading + signature body), P01, DoD#8 and TP-01
+all define 17 functions + 1 exception class = 18 exports. Per "do not invent
+behavior", that full §6.1 body is implemented and exported here — no function is
 dropped and none is invented. `__all__` therefore holds 18 names.
 
 No I/O, no network, no credentials, no DB/exchange, no dynamic execution, no

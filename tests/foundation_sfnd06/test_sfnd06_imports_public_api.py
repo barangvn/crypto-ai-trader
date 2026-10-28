@@ -19,10 +19,9 @@ AC01_IMPORT_NAMES = (
 )
 
 # Exact public API surface defined by SPEC §6.1 signature BODY
-# (17 functions + 1 exception class = 18 names). See D-06-A documentation note:
-# the SPEC §6.1 heading / P01 / DoD#8 / TP-01 say "13", but the §6.1 body
-# explicitly defines 17 functions + 1 exception. Per "no invent behavior" the
-# full §6.1 body is implemented; no name is dropped or invented.
+# (17 functions + 1 exception class = 18 names). SPEC §6.1 heading/body, P01,
+# DoD#8 and TP-01 all agree on this 18-name surface; per "no invent behavior"
+# no name is dropped or invented.
 EXPECTED_PUBLIC_API = frozenset(
     {
         "CanonicalSerializationError",
