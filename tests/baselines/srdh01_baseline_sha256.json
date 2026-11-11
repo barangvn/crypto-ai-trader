@@ -1,0 +1,16 @@
+{
+  "app/contracts/canonical.py": "a5a0ceb3d38b99edf95b237b09512b571636d5349a2dc2927ad25e1c7eeb9a00",
+  "app/contracts/types.py": "258c4aca1a4b8ef7c65c8f1c19c0de249bde774b2decb5e699a2c8d890fc5c5a",
+  "app/ingest/adapters/replay_bundle_adapter.py": "4eea47d7fbcfc6995ed1d4ee58bd196316ca3f969e3ae69e736389807bf59852",
+  "app/platform/__init__.py": "5384bfdb2df380b6557cc7a71d16891415bccaa87699406e236f752c6415389f",
+  "app/processing/normalizer.py": "44f81c278826785ef622bc7b0c6c1679a6173d8f8b37494e8ff4c7057177bcd9",
+  "app/processing/quality_monitor.py": "9f0a2c57c4e342f627ce6c50a96fcc8c6ced27e5e83444459ca8953ecc493f86",
+  "app/processing/replay_clock.py": "77c357d14fc596585523cdf01c37c19d984ca4aace3403ac80ba28759199ff84",
+  "tests/integration/test_pipeline_happy_path.py": "0f5fa53c5cabb27dff1eaf317e9cfa8fda939e5b9e829243270d714d3fb5fedf",
+  "tests/unit/ingest/test_replay_bundle_adapter.py": "fe39e9a8253cb812a51440d3ec96e49f5074422e442a2e5191a1f3b7659aa9dc",
+  "tests/unit/platform/test_event_bus.py": "b9033377bf3cbdef19c1d9132a0f056a8b4959224b3130c5fb757180df2142d6",
+  "tests/unit/processing/test_validator_9checks.py": "746d07f3c49d09445727f6170abc1d2386d99dc2a4e852538cfee8679a71bd8e",
+  "app/contracts/__init__.py": "a78b793dda54f6a105706d9cc7db4cb1f0b83add2cc7f96b9a56fe878674ccd1",
+  "app/contracts/model.py": "ccdae968c392ec682c0f2300b96686f37b1fcb3854c331ba0b34b3f27d5db904",
+  "app/contracts/opportunity.py": "bf82addc057535fe4a666c55ad3367bc9272ffaae1887a16be2e8eb9a2df1613"
+}

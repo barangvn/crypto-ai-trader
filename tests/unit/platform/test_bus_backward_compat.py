@@ -111,8 +111,9 @@ def test_AC03_regression_132_still_passes_shape():
 
 
 def test_AC04_srdh01_14_pipeline_sources_sha256_immutable_smoke():
-    """AC-04 smoke: .tmp/srdh01_baseline_sha256.json 14 dosya içeriyor olmalı
-    ve SHA-256'ları mevcut dosyalarla aynı olmalı (event_bus.py hariç tutuldu)."""
+    """AC-04 smoke: tests/baselines/srdh01_baseline_sha256.json tam 14 dosya
+    içermeli ve SHA-256'ları mevcut dosyalarla (CRLF→LF normalize edilmiş)
+    aynı olmalı (event_bus.py hariç tutuldu)."""
     import hashlib
     import json
     import os
@@ -120,17 +121,25 @@ def test_AC04_srdh01_14_pipeline_sources_sha256_immutable_smoke():
     # file: tests/unit/platform/test_bus_backward_compat.py
     # parents[0]=platform, parents[1]=unit, parents[2]=tests, parents[3]=project root
     base = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-    baseline_path = os.path.join(base, ".tmp", "srdh01_baseline_sha256.json")
-    with open(baseline_path, "r", encoding="utf-8") as fh:
-        baseline = json.load(fh)
-    assert len(baseline) >= 14, f"expected >=14 srdh01 files, got {len(baseline)}"
+    baseline_path = os.path.join(base, "tests", "baselines", "srdh01_baseline_sha256.json")
+    assert os.path.isfile(baseline_path), (
+        f"Baseline file missing (fail-closed): {baseline_path}"
+    )
+    try:
+        with open(baseline_path, "r", encoding="utf-8") as fh:
+            baseline = json.load(fh)
+    except json.JSONDecodeError as exc:
+        raise AssertionError(
+            f"Baseline JSON is corrupt (fail-closed): {baseline_path}: {exc}"
+        ) from exc
+    assert len(baseline) == 14, f"expected exactly 14 srdh01 files, got {len(baseline)}"
     for rel, expected in baseline.items():
         p = os.path.join(base, rel)
         with open(p, "rb") as fh:
-            actual = hashlib.sha256(fh.read()).hexdigest()
+            raw = fh.read()
+        actual = hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest()
         assert actual == expected, (
-            f"SHA-256 mismatch for {rel}: expected {expected[:16]}… "
-            f"got {actual[:16]}…"
+            f"SHA-256 mismatch for {p}: expected {expected} got {actual}"
         )
     # Garanti: event_bus.py artık baseline listesinde YOKTUR
     assert "app/platform/event_bus.py" not in baseline
