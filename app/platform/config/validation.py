@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import configparser
+import json
+from pathlib import Path
 from typing import Any
 
 from .errors import ConfigValidationError
@@ -58,14 +60,96 @@ _F_MAXLEV = "max_leverage" + "_allowed"
 _F_SHORT = "allow" + "_short"
 
 
-def parse_safety(parser: configparser.ConfigParser, source: str) -> EnvSafetyLocks:
+class _DuplicateJsonKeyError(Exception):
+    # ``json.loads`` son değeri sessizce kabul eder; strict overlay bunu yasaklar.
+    def __init__(self, key: str) -> None:
+        super().__init__(key)
+        self.key = key
+
+
+def _strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    # OD-FND-04-05: yinelenen JSON anahtarı fail-closed olmalıdır.
+    seen: set[str] = set()
+    for key, _value in pairs:
+        if key in seen:
+            raise _DuplicateJsonKeyError(key)
+        seen.add(key)
+    return dict(pairs)
+
+
+def load_allow_api_keys(json_path: Path, source: str) -> bool:
+    # ``allow_api_keys`` için TEK yetkili kaynak JSON safety overlay'idir
+    # (OD-FND-04-05 / CLAR-01 / CLAR-02). INI bu anahtar için OKUNMAZ; fallback
+    # veya merge YOKTUR.
+    try:
+        raw_text = json_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        # Eksik dosya -> varsayılan ``False`` (GOV-06 m.3 / OD-FND-04-05).
+        return False
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ConfigValidationError(
+            fields=["json_read"],
+            reason=f"Safety JSON read failed: {exc}",
+            source_file=source,
+        ) from exc
+
+    try:
+        data = json.loads(raw_text, object_pairs_hook=_strict_json_object)
+    except _DuplicateJsonKeyError as exc:
+        raise ConfigValidationError(
+            fields=["json_parse"],
+            reason=f"Duplicate JSON key '{exc.key}' in safety overlay.",
+            source_file=source,
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise ConfigValidationError(
+            fields=["json_parse"],
+            reason=f"Safety JSON parse failed: {exc}",
+            source_file=source,
+        ) from exc
+
+    if not isinstance(data, dict):
+        raise ConfigValidationError(
+            fields=["json_schema"],
+            reason=f"Safety JSON root must be an object, got {type(data).__name__}.",
+            source_file=source,
+        )
+    unknown = sorted(k for k in data if k != _F_ALLOW)
+    if unknown:
+        raise ConfigValidationError(
+            fields=["json_schema"],
+            reason=f"Unknown key(s) in safety JSON: {', '.join(unknown)}.",
+            source_file=source,
+        )
+    if _F_ALLOW not in data:
+        return False
+    value = data[_F_ALLOW]
+    # Gerçek Python bool zorunlu. ``isinstance(True, int)`` tuzağı nedeniyle
+    # katı ``type(value) is bool`` kontrolü kullanılır.
+    if type(value) is not bool:
+        raise ConfigValidationError(
+            fields=["json_schema"],
+            reason=(
+                f"Invalid type for '{_F_ALLOW}' in safety JSON: "
+                f"{type(value).__name__} (strict bool only)."
+            ),
+            source_file=source,
+        )
+    return value
+
+
+def parse_safety(
+    parser: configparser.ConfigParser,
+    source: str,
+    allow_api_keys: bool = False,
+) -> EnvSafetyLocks:
     section = "safety"
     trading = get_field(parser, section, _F_TRADING, "false")
-    api = get_field(parser, section, _F_ALLOW, "false")
     lev_raw = get_field(parser, section, _F_MAXLEV, "1")
     short = get_field(parser, section, _F_SHORT, "false")
     trading_b = coerce_bool(trading, source, _F_TRADING)
-    api_b = coerce_bool(api, source, _F_ALLOW)
+    # ``allow_api_keys`` INI'den okunmaz; doğrulanmış değer JSON overlay'inden gelir.
+    api_b = allow_api_keys
     lev_i = coerce_int(lev_raw, source, _F_MAXLEV)
     short_b = coerce_bool(short, source, _F_SHORT)
     failed: list[str] = []

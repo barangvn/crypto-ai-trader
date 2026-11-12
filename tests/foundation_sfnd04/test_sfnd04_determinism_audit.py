@@ -245,3 +245,41 @@ def test_sfnd04_allow_api_keys_and_strict_coercion_unaffected_by_audit_api():
     assert coerce_bool("true", "src", "field") is True
     assert coerce_bool("0", "src", "field") is False
     assert coerce_bool(True, "src", "field") is True
+
+
+# --- JSON typed safety overlay: determinism + audit kaynağı korunumu ---
+
+
+def test_sfnd04_json_overlay_determinism_10x(tmp_ini_factory, monkeypatch, tmp_path):
+    from tests.foundation_sfnd04.test_sfnd04_validation import _inject, _patch_cfg_dir
+
+    _inject(tmp_path, tmp_ini_factory, {})
+    (tmp_path / "config.dev.safety.json").write_text(
+        json.dumps({"allow_api_keys": False}), encoding="utf-8"
+    )
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    results: list[str] = []
+    for _ in range(10):
+        cfg = ConfigFactory.read_env("dev")
+        d = _asdict_flat(cfg)
+        d.pop("_audit_trail", None)
+        results.append(sha_json(d))
+    assert len(set(results)) == 1
+    assert cfg.safety.allow_api_keys is False
+
+
+def test_sfnd04_json_overlay_preserves_ini_audit_source_file(
+    tmp_ini_factory, monkeypatch, tmp_path
+):
+    from tests.foundation_sfnd04.test_sfnd04_validation import _inject, _patch_cfg_dir
+
+    _inject(tmp_path, tmp_ini_factory, {})
+    (tmp_path / "config.dev.safety.json").write_text(
+        json.dumps({"allow_api_keys": False}), encoding="utf-8"
+    )
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    _cfg, records = ConfigFactory.read_env("dev", return_audit=True)
+    assert len(records) == 1
+    # ``source_file`` audit alanı mevcut INI kaynak anlamını korur; JSON yolu eklenmez.
+    assert records[0].source_file.endswith("config.dev.ini")
+    assert "safety.json" not in records[0].source_file

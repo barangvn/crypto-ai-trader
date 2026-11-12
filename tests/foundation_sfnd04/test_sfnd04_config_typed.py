@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import fields
 from pathlib import Path
@@ -52,7 +53,7 @@ def test_sfnd04_read_env_dev_returns_appconfig():
     assert cfg.safety.allow_api_keys is False
 
 
-def test_sfnd04_allow_api_keys_ini_mapping_and_exc_fields(
+def test_sfnd04_allow_api_keys_json_mapping_and_exc_fields(
     tmp_ini_factory, monkeypatch, tmp_path
 ):
     # (a) Dataclass contract (D-01): canonical attribute present, legacy name removed.
@@ -60,20 +61,45 @@ def test_sfnd04_allow_api_keys_ini_mapping_and_exc_fields(
     assert "allow_api_keys" in field_names
     assert _K_LEGACY not in field_names
 
-    # (b) Real INI [safety] allow_api_keys value maps onto the typed attribute
-    #     (not merely the dataclass default: the [safety] section is actually parsed).
+    # (b) JSON safety overlay value maps onto the typed attribute (JSON false);
+    #     INI içindeki allow_api_keys artık okunmaz (tek yetkili kaynak JSON).
     tmp_ini_factory(_safety_ini_sections("false"), "config.dev.ini")
+    (tmp_path / "config.dev.safety.json").write_text(
+        json.dumps({_K_ALLOW: False}), encoding="utf-8"
+    )
     _patch_cfg_dir(monkeypatch, tmp_path)
     cfg = ConfigFactory.read_env("dev")
     assert cfg.safety.allow_api_keys is False
 
-    # (c) The canonical INI option name is the one read and preserved in exc.fields.
-    tmp_ini_factory(_safety_ini_sections("definitely_not"), "config.dev.ini")
+    # (c) JSON true reaches the FC-3 safety lock and preserves exc.fields name.
+    (tmp_path / "config.dev.safety.json").write_text(
+        json.dumps({_K_ALLOW: True}), encoding="utf-8"
+    )
     _patch_cfg_dir(monkeypatch, tmp_path)
     with pytest.raises(ConfigValidationError) as exc:
         ConfigFactory.read_env("dev")
     assert "allow_api_keys" in exc.value.fields
     assert _K_LEGACY not in exc.value.fields
+
+
+def test_sfnd04_prod_runtime_key_rejected():
+    # ``prod`` geçerli bir runtime environment key DEĞİLDİR.
+    with pytest.raises(ValueError):
+        ConfigFactory.read_env("prod")
+
+
+def test_sfnd04_paper_prod_maps_to_prod_safety_json(
+    tmp_ini_factory, monkeypatch, tmp_path
+):
+    # ``paper-prod`` runtime key'i ``config.prod.safety.json`` dosyasına çözülür.
+    tmp_ini_factory(_safety_ini_sections("false"), "config.prod.ini")
+    (tmp_path / "config.prod.safety.json").write_text(
+        json.dumps({_K_ALLOW: True}), encoding="utf-8"
+    )
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    with pytest.raises(ConfigValidationError) as exc:
+        ConfigFactory.read_env("paper-prod")
+    assert "allow_api_keys" in exc.value.fields
 
 
 @pytest.mark.parametrize("env_name", _env_names())

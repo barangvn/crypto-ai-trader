@@ -16,6 +16,7 @@ from .models import (
     _VALID_ENVS,
 )
 from .validation import (
+    load_allow_api_keys,
     parse_extensions,
     parse_observability,
     parse_platform_contract,
@@ -109,6 +110,7 @@ class ConfigFactory:
         env: EnvName = env_name  # type: ignore[assignment]
         alias = _CONFIG_ALIAS[env]
         ini_path = _CONFIG_DIR / f"config.{alias}.ini"
+        json_path = _CONFIG_DIR / f"config.{alias}.safety.json"
         if not ini_path.exists():
             raise FileNotFoundError(
                 f"INI config file not found: {ini_path}"
@@ -133,7 +135,8 @@ class ConfigFactory:
                 source_file=str(ini_path),
             )
         validate_required_env_section(parser, str(ini_path))
-        env_safety = parse_safety(parser, str(ini_path))
+        allow_api_keys = load_allow_api_keys(json_path, str(json_path))
+        env_safety = parse_safety(parser, str(ini_path), allow_api_keys)
         observability = parse_observability(parser, env)
         platform_contract = parse_platform_contract(parser)
         raw_env = dict(parser.items("env"))

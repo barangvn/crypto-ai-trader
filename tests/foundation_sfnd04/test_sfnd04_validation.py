@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -57,7 +58,12 @@ _K_ALLOW = "allow_api" + "_keys"
 
 
 def test_sfnd04_allow_ext_creds_true_failclosed(tmp_ini_factory, monkeypatch, tmp_path):
-    _inject(tmp_path, tmp_ini_factory, {"safety": {_K_ALLOW: "1"}})
+    # ``allow_api_keys`` artık JSON overlay'inden okunur (INI yok sayılır):
+    # JSON true -> FC-3 safety lock ihlali.
+    _inject(tmp_path, tmp_ini_factory, {})
+    (tmp_path / "config.dev.safety.json").write_text(
+        json.dumps({_K_ALLOW: True}), encoding="utf-8"
+    )
     _patch_cfg_dir(monkeypatch, tmp_path)
     with pytest.raises(ConfigValidationError) as exc:
         ConfigFactory.read_env("dev")
@@ -221,11 +227,12 @@ def test_sfnd04_coerce_bool_strict_rejection_via_read_env(tmp_ini_factory, monke
 def test_sfnd04_coerce_bool_strict_preserves_allow_api_keys_field(
     tmp_ini_factory, monkeypatch, tmp_path
 ):
+    # INI'de geçersiz bir allow_api_keys token'ı bulunsa bile tek yetkili kaynak
+    # JSON overlay'idir: INI değeri ne okunur ne coerce edilir -> varsayılan False.
     _inject(tmp_path, tmp_ini_factory, {"safety": {_K_ALLOW: "off"}})
     _patch_cfg_dir(monkeypatch, tmp_path)
-    with pytest.raises(ConfigValidationError) as exc:
-        ConfigFactory.read_env("dev")
-    assert _K_ALLOW in exc.value.fields
+    cfg = ConfigFactory.read_env("dev")
+    assert cfg.safety.allow_api_keys is False
 
 
 def test_sfnd04_coerce_bool_strict_observability_metrics_rejected(
@@ -249,3 +256,187 @@ def test_sfnd04_missing_safety_section_uses_defaults(tmp_ini_factory, monkeypatc
     assert cfg.safety.allow_api_keys is False
     assert cfg.safety.trading_permission_default is False
     assert cfg.safety.max_leverage_allowed == 1
+
+
+# --- S-FND-04 JSON typed overlay: allow_api_keys (OD-FND-04-05/CLAR-01/CLAR-02) ---
+
+_JSON_ALIAS = {"dev": "dev", "test": "test", "stg": "stg", "paper-prod": "prod"}
+
+
+def _write_safety_json(tmp_path: Path, alias: str, raw: str) -> Path:
+    p = tmp_path / f"config.{alias}.safety.json"
+    p.write_text(raw, encoding="utf-8")
+    return p
+
+
+@pytest.mark.parametrize("env_name", ["dev", "test", "stg", "paper-prod"])
+def test_sfnd04_json_alias_mapping(env_name, tmp_ini_factory, monkeypatch, tmp_path):
+    alias = _JSON_ALIAS[env_name]
+    _inject(tmp_path, tmp_ini_factory, {}, name=f"config.{alias}.ini")
+    for a in ("dev", "test", "stg", "prod"):
+        _write_safety_json(tmp_path, a, json.dumps({_K_ALLOW: a == alias}))
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    with pytest.raises(ConfigValidationError) as exc:
+        ConfigFactory.read_env(env_name)
+    assert _K_ALLOW in exc.value.fields
+
+
+@pytest.mark.parametrize("env_name", ["dev", "test", "stg", "paper-prod"])
+def test_sfnd04_json_overlay_false_all_envs(env_name, tmp_ini_factory, monkeypatch, tmp_path):
+    alias = _JSON_ALIAS[env_name]
+    _inject(tmp_path, tmp_ini_factory, {}, name=f"config.{alias}.ini")
+    for a in ("dev", "test", "stg", "prod"):
+        _write_safety_json(tmp_path, a, json.dumps({_K_ALLOW: False}))
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    cfg = ConfigFactory.read_env(env_name)
+    assert cfg.safety.allow_api_keys is False
+
+
+def test_sfnd04_json_false_ok(tmp_ini_factory, monkeypatch, tmp_path):
+    _inject(tmp_path, tmp_ini_factory, {})
+    _write_safety_json(tmp_path, "dev", json.dumps({_K_ALLOW: False}))
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    cfg = ConfigFactory.read_env("dev")
+    assert cfg.safety.allow_api_keys is False
+
+
+def test_sfnd04_json_missing_file_defaults_false(tmp_ini_factory, monkeypatch, tmp_path):
+    _inject(tmp_path, tmp_ini_factory, {})
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    cfg = ConfigFactory.read_env("dev")
+    assert cfg.safety.allow_api_keys is False
+
+
+def test_sfnd04_json_missing_key_defaults_false(tmp_ini_factory, monkeypatch, tmp_path):
+    _inject(tmp_path, tmp_ini_factory, {})
+    _write_safety_json(tmp_path, "dev", json.dumps({}))
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    cfg = ConfigFactory.read_env("dev")
+    assert cfg.safety.allow_api_keys is False
+
+
+def test_sfnd04_json_true_reaches_safety_lock(tmp_ini_factory, monkeypatch, tmp_path):
+    _inject(tmp_path, tmp_ini_factory, {})
+    _write_safety_json(tmp_path, "dev", json.dumps({_K_ALLOW: True}))
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    with pytest.raises(ConfigValidationError) as exc:
+        ConfigFactory.read_env("dev")
+    assert _K_ALLOW in exc.value.fields
+    assert "Safety lock violation" in exc.value.reason
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ['"true"', '"false"', "null", "1", "0", "1.5", "[]", "{}", "[true]"],
+)
+def test_sfnd04_json_bad_type_rejected(raw, tmp_ini_factory, monkeypatch, tmp_path):
+    _inject(tmp_path, tmp_ini_factory, {})
+    _write_safety_json(tmp_path, "dev", '{"' + _K_ALLOW + '": ' + raw + "}")
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    with pytest.raises(ConfigValidationError) as exc:
+        ConfigFactory.read_env("dev")
+    assert "json_schema" in exc.value.fields
+
+
+@pytest.mark.parametrize("raw", ["true", "false", "1", '"x"', "[]"])
+def test_sfnd04_json_root_not_object_rejected(raw, tmp_ini_factory, monkeypatch, tmp_path):
+    _inject(tmp_path, tmp_ini_factory, {})
+    _write_safety_json(tmp_path, "dev", raw)
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    with pytest.raises(ConfigValidationError) as exc:
+        ConfigFactory.read_env("dev")
+    assert "json_schema" in exc.value.fields
+
+
+def test_sfnd04_json_unknown_key_rejected(tmp_ini_factory, monkeypatch, tmp_path):
+    _inject(tmp_path, tmp_ini_factory, {})
+    _write_safety_json(tmp_path, "dev", json.dumps({_K_ALLOW: False, "nope": 1}))
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    with pytest.raises(ConfigValidationError) as exc:
+        ConfigFactory.read_env("dev")
+    assert "json_schema" in exc.value.fields
+    assert "nope" in exc.value.reason
+
+
+def test_sfnd04_json_unknown_keys_sorted(tmp_ini_factory, monkeypatch, tmp_path):
+    _inject(tmp_path, tmp_ini_factory, {})
+    _write_safety_json(tmp_path, "dev", json.dumps({"zzz": 1, "aaa": 2}))
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    with pytest.raises(ConfigValidationError) as exc:
+        ConfigFactory.read_env("dev")
+    assert "aaa, zzz" in exc.value.reason
+
+
+def test_sfnd04_json_broken_rejected(tmp_ini_factory, monkeypatch, tmp_path):
+    _inject(tmp_path, tmp_ini_factory, {})
+    _write_safety_json(tmp_path, "dev", "{not-json")
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    with pytest.raises(ConfigValidationError) as exc:
+        ConfigFactory.read_env("dev")
+    assert "json_parse" in exc.value.fields
+
+
+def test_sfnd04_json_duplicate_key_rejected(tmp_ini_factory, monkeypatch, tmp_path):
+    _inject(tmp_path, tmp_ini_factory, {})
+    _write_safety_json(
+        tmp_path, "dev", '{"' + _K_ALLOW + '": false, "' + _K_ALLOW + '": true}'
+    )
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    with pytest.raises(ConfigValidationError) as exc:
+        ConfigFactory.read_env("dev")
+    assert "json_parse" in exc.value.fields
+    assert _K_ALLOW in exc.value.reason
+
+
+def test_sfnd04_json_utf8_rejected(tmp_ini_factory, monkeypatch, tmp_path):
+    _inject(tmp_path, tmp_ini_factory, {})
+    (tmp_path / "config.dev.safety.json").write_bytes(b"\xff\xfe\x00")
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    with pytest.raises(ConfigValidationError) as exc:
+        ConfigFactory.read_env("dev")
+    assert "json_read" in exc.value.fields
+
+
+def test_sfnd04_json_oserror_rejected(tmp_ini_factory, monkeypatch, tmp_path):
+    _inject(tmp_path, tmp_ini_factory, {})
+    (tmp_path / "config.dev.safety.json").mkdir()
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    with pytest.raises(ConfigValidationError) as exc:
+        ConfigFactory.read_env("dev")
+    assert "json_read" in exc.value.fields
+
+
+def test_sfnd04_ini_allow_api_keys_ignored(tmp_ini_factory, monkeypatch, tmp_path):
+    # INI'de truthy allow_api_keys olsa bile JSON yoksa sonuç False: INI okunmaz.
+    _inject(tmp_path, tmp_ini_factory, {"safety": {_K_ALLOW: "1"}})
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    cfg = ConfigFactory.read_env("dev")
+    assert cfg.safety.allow_api_keys is False
+
+
+def test_sfnd04_no_ini_json_merge(tmp_ini_factory, monkeypatch, tmp_path):
+    # JSON false, INI truthy -> JSON kazanır (merge/fallback/öncelik zinciri yok).
+    _inject(tmp_path, tmp_ini_factory, {"safety": {_K_ALLOW: "true"}})
+    _write_safety_json(tmp_path, "dev", json.dumps({_K_ALLOW: False}))
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    cfg = ConfigFactory.read_env("dev")
+    assert cfg.safety.allow_api_keys is False
+
+
+def test_sfnd04_other_safety_fields_still_from_ini(tmp_ini_factory, monkeypatch, tmp_path):
+    # Diğer safety alanları INI düzeninde çalışmaya devam eder.
+    _inject(tmp_path, tmp_ini_factory, {"safety": {"max_leverage_allowed": "2"}})
+    _write_safety_json(tmp_path, "dev", json.dumps({_K_ALLOW: False}))
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    with pytest.raises(ConfigValidationError) as exc:
+        ConfigFactory.read_env("dev")
+    assert "max_leverage_allowed" in exc.value.fields
+
+
+def test_sfnd04_audit_source_file_is_ini(tmp_ini_factory, monkeypatch, tmp_path):
+    _inject(tmp_path, tmp_ini_factory, {})
+    _write_safety_json(tmp_path, "dev", json.dumps({_K_ALLOW: False}))
+    _patch_cfg_dir(monkeypatch, tmp_path)
+    cfg, records = ConfigFactory.read_env("dev", return_audit=True)
+    assert len(records) == 1
+    assert records[0].source_file.endswith("config.dev.ini")
