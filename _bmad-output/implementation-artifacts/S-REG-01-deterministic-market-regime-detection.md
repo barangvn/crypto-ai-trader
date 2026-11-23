@@ -271,7 +271,7 @@ Trend = 3 bileşen ortalaması:
 
 #### 4.3.2 Eksen 2: Momentum Ölçütü (Ağırlık 0.30)
   a) **Abs Momentum normalizasyonu:** `mom_10_abs / close_raw` (close_raw None ise 0). clamp `[-0.05, +0.05]` → 20x büyüterek `[-1,+1]` → `mom_abs_component`.
-  b) **Pct Momentum:** `mom_10_pct` (zaten %), clamp `[-5.0, +5.0]` → 5'e böl → `[-1,+1]` → `mom_pct_component`.
+  b) **Pct Momentum:** `mom_10_pct` (decimal return; 0.02 = 2%), clamp `[-0.05, +0.05]` → 0.05'e böl → `[-1,+1]` → `mom_pct_component`.
 
 **Mom_Ekseni = clamp( `0.55 × mom_abs_component + 0.45 × mom_pct_component`, -1, +1 )**
 

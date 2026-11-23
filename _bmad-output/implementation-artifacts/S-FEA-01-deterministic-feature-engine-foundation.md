@@ -169,7 +169,7 @@ class FeatureEngine:
 | `atr_14` | `float` | fiyat aralığı | YES | 0.0 (soft floor) | - | ATR(14) Wilder | H4 |
 | `vwap_20` | `float` | fiyat | YES (insufficient + zero-vol) | - | - | VWAP rolling(20) | H4 |
 | `mom_10_abs` | `float` | fiyat farkı | YES | - | - | Mom(10): close[t]-close[t-10] | H5 |
-| `mom_10_pct` | `float` | % | YES | - | - | Mom(10) % change ×100 | H5 |
+| `mom_10_pct` | `float` | decimal return (0.02 = 2%) | YES | - | - | Mom(10) return close[t]/close[t-10] - 1 | H5 |
 | `volatility_20_bps` | `float` | bps | YES | 0.0 (soft) | - | Returns std(window=20) ×10000 | H5 |
 | `vol_ratio_20` | `float` | oran | YES | 0.0 (soft) | - | Vol[t] / mean(vol window 20) | H5 |
 | `vol_std_20_scaled` | `float` | ölçeklenmiş std | YES | 0.0 (soft) | - | Std(vol window 20) / 1_000_000 | H5 |
@@ -243,7 +243,7 @@ class FeatureEngine:
 
 ### 4.3.5 Momentum (H5 — Absolute + Percent Change)
 - **Abs:** `mom_abs[t] = close[t] - close[t - period]`
-- **Pct:** `mom_pct[t] = (close[t] / close[t - period] - 1.0) * 100.0`
+- **Pct:** `mom_pct[t] = close[t] / close[t - period] - 1.0` (decimal return; 0.02 = 2%)
 - **Insufficient:** `t < period` → None.
 - **Period:** 10 (test fixture default; production ADN değil).
 
@@ -331,7 +331,7 @@ class FeatureEngine:
 | Kod | Given | When | Then |
 |---|---|---|---|
 | C35 | Mom abs period=10; close[t]=110, close[t-10]=100 | mom_10_abs[t] | = 10.0 approx |
-| C36 | Mom pct period=10; aynı ↑ değerler | mom_10_pct[t] | = (110/100 -1)*100 = 10.0 approx |
+| C36 | Mom pct period=10; aynı ↑ değerler | mom_10_pct[t] | = (110/100 -1) = 0.1 approx |
 | C37 | Mom t=5 (period=10'dan küçük) | mom_10_abs[5] = None | True (insufficient) |
 | C38 | Volatility window=20; close = 1,2,1,2,1,2,... (alternating); returns=±1/x | 30 nokta sonu stdev hesap. volatility_bps | ≥ 0.0 (min bound) ve sabit serie deterministik |
 | C39 | Volatility t=10 (window=20'den küçük) | volatility_20_bps[t] = None | True |

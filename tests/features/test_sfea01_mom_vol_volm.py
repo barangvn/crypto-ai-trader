@@ -51,7 +51,7 @@ class TestC35C36Momentum:
     def test_c36_mom_pct(self):
         closes = [100.0] * 10 + [110.0]
         _, pct_series = FeatureEngine._compute_momentum(closes, 10)
-        assert pct_series[10] == pytest.approx(10.0)
+        assert pct_series[10] == pytest.approx(0.1)
 
 
 class TestC37MomInsufficient:

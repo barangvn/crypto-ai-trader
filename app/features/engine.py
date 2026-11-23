@@ -342,7 +342,7 @@ class FeatureEngine:
             if _is_close(ref, 0.0):
                 out_pct[t] = None
             else:
-                out_pct[t] = (cur / ref - 1.0) * 100.0
+                out_pct[t] = cur / ref - 1.0
         return out_abs, out_pct
 
     @staticmethod
