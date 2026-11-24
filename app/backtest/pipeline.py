@@ -263,7 +263,7 @@ def _make_risk_context(
     symbol_price_ref: Decimal | None = None,
 ) -> RiskContext:
     return RiskContext(
-        kill_switch=KillSwitchStateSpec(active=False, reason="", triggered_at=None),
+        kill_switch=KillSwitchStateSpec(global_kill=False),
         as_of=as_of,
         symbol_current_exposure_notional=symbol_current_exposure_notional,
         symbol_price_ref=symbol_price_ref,
@@ -272,13 +272,16 @@ def _make_risk_context(
 
 def _make_limits_snapshot() -> LimitsSnapshot:
     return LimitsSnapshot(
-        max_position_notional_quote=Decimal("100000"),
-        max_single_order_notional_quote=Decimal("10000"),
-        max_daily_notional_quote=Decimal("1000000"),
-        max_holding_count=5,
-        max_leverage=Decimal("1"),
-        allow_short=False,
-        allow_futures=False,
+        max_position_notional_per_symbol=Decimal("100000"),
+        max_exposure_notional_total=Decimal("1000000"),
+        max_daily_loss_notional=Decimal("1000000"),
+        max_drawdown_pct=0.2,
+        max_consecutive_losses=5,
+        max_leverage_allowed=1,
+        current_exposure_notional=Decimal("0"),
+        current_daily_pnl=Decimal("0"),
+        current_drawdown_pct=0.0,
+        current_consecutive_losses=0,
     )
 
 
